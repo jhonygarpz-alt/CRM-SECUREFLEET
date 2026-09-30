@@ -1,12 +1,14 @@
 /**
- * Carga datos de ejemplo (catálogo base de SecureFleet, leads y respuestas rápidas).
+ * Datos iniciales: catálogo base de SecureFleet y respuestas rápidas (seedCatalog),
+ * y leads/oportunidades de ejemplo (seedDemo).
  * Los precios son ilustrativos: ajústalos desde el módulo de Catálogo.
  * Uso: npm run seed
  */
 import 'dotenv/config';
+import { fileURLToPath } from 'node:url';
 import { openDb } from './db.js';
 
-const db = openDb();
+export function seedCatalog(db) {
 
 const products = [
   ['GPS-4G-BAS', 'Localizador GPS 4G básico', 'Equipo GPS 4G con reporte cada 30 s, corte de motor opcional y batería de respaldo.', 'producto', 'Hardware', 'pieza', 1890, 'unico'],
@@ -35,8 +37,10 @@ if (db.prepare('SELECT COUNT(*) AS n FROM quick_replies').get().n === 0) {
   const insR = db.prepare('INSERT INTO quick_replies (shortcut, body) VALUES (?, ?)');
   for (const r of replies) insR.run(...r);
 }
+}
 
-if (db.prepare('SELECT COUNT(*) AS n FROM contacts').get().n === 0) {
+export function seedDemo(db) {
+  if (db.prepare('SELECT COUNT(*) AS n FROM contacts').get().n > 0) return;
   const insC = db.prepare(`INSERT INTO contacts (type, name, company, position, email, phone, source, status, fleet_size, city, owner_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`);
   const c1 = insC.run('lead', 'Laura Méndez', 'Transportes del Bajío', 'Gerente de logística', 'laura@ejemplo.com', '5214771234567', 'Sitio web', 'calificado', 35, 'León').lastInsertRowid;
@@ -52,4 +56,9 @@ if (db.prepare('SELECT COUNT(*) AS n FROM contacts').get().n === 0) {
   insA.run(c2, 'whatsapp', 'Dar seguimiento por WhatsApp y calificar necesidad', tomorrow);
 }
 
-console.log('Datos de ejemplo cargados.');
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const db = openDb();
+  seedCatalog(db);
+  seedDemo(db);
+  console.log('Datos de ejemplo cargados.');
+}

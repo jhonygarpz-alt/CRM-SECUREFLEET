@@ -54,6 +54,29 @@ Usuario inicial: `admin@securefleet.mx` / `admin123`. **Cámbialo** desde Config
 
 Sin credenciales de WhatsApp, el CRM trabaja en **modo simulación**: los mensajes se guardan pero no se envían. En la bandeja de WhatsApp, el botón 🧪 simula un mensaje entrante para probar el flujo completo.
 
+## Publicar en la nube (Railway)
+
+El proyecto ya incluye `Dockerfile` y `railway.json`. Railway cuesta alrededor de 5 USD al mes y te da una URL con HTTPS, que Meta exige para los webhooks.
+
+1. Crea una cuenta en https://railway.com con tu GitHub.
+2. **New Project → Deploy from GitHub repo →** `CRM-SECUREFLEET`.
+3. En el servicio, **Settings → Source → Branch**: elige la rama donde está el código (o `main` si ya se fusionó).
+4. **Variables**: agrega
+   ```
+   NODE_ENV=production
+   JWT_SECRET=<texto largo y aleatorio>
+   ADMIN_EMAIL=tu-correo@securefleet.mx
+   ADMIN_PASSWORD=<contraseña de al menos 8 caracteres>
+   LOAD_CATALOG=1
+   TZ=America/Mexico_City
+   ```
+   En producción el servidor no arranca sin `JWT_SECRET` ni `ADMIN_PASSWORD`. `LOAD_CATALOG=1` carga el catálogo base la primera vez.
+5. **Volumen** (obligatorio, aquí vive la base de datos): clic derecho en el servicio → **Attach Volume** → Mount path `/data`. Sin el volumen, los datos se pierden en cada despliegue.
+6. **Settings → Networking → Generate Domain**. Obtienes algo como `https://securefleet-crm.up.railway.app`.
+7. Cuando tengas las credenciales de WhatsApp, agrégalas en Variables (`WHATSAPP_TOKEN`, etc.) y usa `https://TU-DOMINIO/api/whatsapp/webhook` como webhook en Meta.
+
+Cada `git push` a esa rama vuelve a desplegar el CRM automáticamente.
+
 ## Producción
 
 ```bash
