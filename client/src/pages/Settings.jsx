@@ -53,6 +53,8 @@ export default function Settings() {
           <label>Email<input value={s.company_email} onChange={set('company_email')} disabled={!isAdmin} /></label>
           <label>Sitio web<input value={s.company_website} onChange={set('company_website')} disabled={!isAdmin} /></label>
           <label className="span-2">Dirección<input value={s.company_address} onChange={set('company_address')} disabled={!isAdmin} /></label>
+          <label>Lema bajo el nombre<input value={s.company_tagline || ''} onChange={set('company_tagline')} disabled={!isAdmin} placeholder="FLEET INTELLIGENCE" /></label>
+          <label>Frase del encabezado<input value={s.company_slogan || ''} onChange={set('company_slogan')} disabled={!isAdmin} placeholder="Seguridad Patrimonial y Monitoreo de Flotas" /></label>
         </section>
 
         <section className="card form-grid">
@@ -60,7 +62,9 @@ export default function Settings() {
           <label>Prefijo de folio<input value={s.quote_prefix} onChange={set('quote_prefix')} disabled={!isAdmin} /></label>
           <label>Vigencia (días)<input type="number" min="1" value={s.quote_validity_days} onChange={set('quote_validity_days')} disabled={!isAdmin} /></label>
           <label>Moneda por defecto<select value={s.default_currency} onChange={set('default_currency')} disabled={!isAdmin}><option>MXN</option><option>USD</option></select></label>
-          <label className="span-2">Términos y condiciones por defecto<textarea rows={3} value={s.quote_terms} onChange={set('quote_terms')} disabled={!isAdmin} /></label>
+          <label>Etiqueta del pago único<input value={s.quote_label_initial || ''} onChange={set('quote_label_initial')} disabled={!isAdmin} placeholder="INVERSIÓN INICIAL" /></label>
+          <label>Etiqueta del pago mensual<input value={s.quote_label_monthly || ''} onChange={set('quote_label_monthly')} disabled={!isAdmin} placeholder="SERVICIO MENSUAL" /></label>
+          <label className="span-2">Condiciones por defecto (una por renglón)<textarea rows={5} value={s.quote_terms} onChange={set('quote_terms')} disabled={!isAdmin} /></label>
         </section>
 
         <section className="card form-grid">

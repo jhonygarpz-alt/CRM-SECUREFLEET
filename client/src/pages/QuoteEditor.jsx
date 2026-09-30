@@ -39,7 +39,7 @@ export default function QuoteEditor() {
       api('/settings').then((s) => setQuote({
         contact_id: search.get('contact') ? Number(search.get('contact')) : '',
         deal_id: search.get('deal') ? Number(search.get('deal')) : '',
-        status: 'borrador', currency: s.default_currency || 'MXN', notes: '', terms: s.quote_terms, valid_until: '', items: [blankItem()],
+        status: 'borrador', currency: s.default_currency || 'MXN', title: '', notes: '', terms: s.quote_terms, valid_until: '', items: [blankItem()],
       }));
     }
   }, [id]); // eslint-disable-line
@@ -74,7 +74,7 @@ export default function QuoteEditor() {
     setSaving(true);
     try {
       const body = {
-        contact_id: Number(quote.contact_id), deal_id: quote.deal_id ? Number(quote.deal_id) : null, status: quote.status,
+        contact_id: Number(quote.contact_id), deal_id: quote.deal_id ? Number(quote.deal_id) : null, status: quote.status, title: quote.title || '',
         valid_until: quote.valid_until || undefined, currency: quote.currency, notes: quote.notes, terms: quote.terms,
         items: quote.items.filter((it) => it.description.trim()), ...extra,
       };
@@ -142,6 +142,9 @@ export default function QuoteEditor() {
         </label>
         <label>Vigencia hasta<input type="date" value={quote.valid_until || ''} onChange={set('valid_until')} placeholder="automática" /></label>
         <label>Moneda<select value={quote.currency} onChange={set('currency')}><option>MXN</option><option>USD</option></select></label>
+        <label style={{ gridColumn: '1 / -1' }}>Título de la propuesta (aparece bajo "PROPUESTA ECONÓMICA")
+          <input value={quote.title || ''} onChange={set('title')} placeholder="ej. Rastreo satelital para 35 tractocamiones" />
+        </label>
       </div>
 
       <div className="card">
@@ -188,8 +191,12 @@ export default function QuoteEditor() {
       </div>
 
       <div className="card form-grid">
-        <label className="span-2">Notas para el cliente<textarea rows={2} value={quote.notes || ''} onChange={set('notes')} /></label>
-        <label className="span-2">Términos y condiciones<textarea rows={3} value={quote.terms || ''} onChange={set('terms')} /></label>
+        <label className="span-2">Texto explicativo (aparece en cursiva bajo los totales)
+          <textarea rows={3} value={quote.notes || ''} onChange={set('notes')} placeholder="ej. La inversión inicial es una tarifa única que incluye…" />
+        </label>
+        <label className="span-2">Condiciones (una por renglón; cada renglón es una viñeta)
+          <textarea rows={5} value={quote.terms || ''} onChange={set('terms')} />
+        </label>
       </div>
 
       {quote.id && <button className="btn danger-outline" onClick={remove}>Eliminar cotización</button>}

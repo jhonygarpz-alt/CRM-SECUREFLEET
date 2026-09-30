@@ -165,9 +165,17 @@ export const DEFAULT_SETTINGS = {
   default_tax_rate: '0.16',
   quote_validity_days: '15',
   quote_prefix: 'SF-COT',
-  quote_terms:
-    'Precios sujetos a cambio sin previo aviso. Vigencia indicada en la cotización. ' +
-    'Servicios mensuales facturados por adelantado. Instalación sujeta a disponibilidad de agenda.',
+  quote_terms: [
+    'Precios sujetos a cambio sin previo aviso y válidos durante la vigencia indicada.',
+    'Los servicios mensuales se facturan por adelantado y su vigencia está sujeta a la continuidad del contrato de servicio.',
+    'La instalación está sujeta a la disponibilidad de agenda y de las unidades.',
+    'Cualquier equipo, servicio o desarrollo adicional fuera de este alcance se cotizará por separado.',
+  ].join('\n'),
+  company_tagline: 'FLEET INTELLIGENCE',
+  company_slogan: 'Seguridad Patrimonial y Monitoreo de Flotas',
+  quote_label_initial: 'INVERSIÓN INICIAL',
+  quote_label_monthly: 'SERVICIO MENSUAL',
+  quote_label_annual: 'SERVICIO ANUAL',
   wa_auto_create_leads: '1',
   wa_welcome_message: '',
   wa_followup_template: '',
@@ -184,6 +192,10 @@ export function openDb(file = process.env.DB_PATH || './data/crm.db') {
   // Unifica teléfonos mexicanos guardados como 521XXXXXXXXXX → 52XXXXXXXXXX.
   db.exec(`UPDATE OR IGNORE contacts SET phone = '52' || substr(phone, 4)
            WHERE length(phone) = 13 AND phone LIKE '521%'`);
+
+  // Migraciones ligeras
+  const quoteCols = db.prepare('PRAGMA table_info(quotes)').all().map((c) => c.name);
+  if (!quoteCols.includes('title')) db.exec('ALTER TABLE quotes ADD COLUMN title TEXT');
 
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) insertSetting.run(k, v);

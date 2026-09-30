@@ -1,7 +1,8 @@
 import PDFDocument from 'pdfkit';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { round2 } from '../utils.js';
-
-const BILLING_LABEL = { unico: 'Pago único', mensual: 'Mensual', anual: 'Anual' };
 
 /** Calcula importes de cada partida y totales de la cotización. */
 export function computeQuote(items) {
@@ -56,146 +57,193 @@ export function money(n, currency = 'MXN') {
 function fmtDate(d) {
   if (!d) return '';
   const date = new Date(d.length === 10 ? d + 'T12:00:00' : d);
-  return date.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
+  return date.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-/** Genera el PDF de la cotización y regresa un Buffer. */
+const ASSETS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../assets');
+const FONT = (name) => path.join(ASSETS, 'fonts', `Carlito-${name}.ttf`);
+const LOGO = path.join(ASSETS, 'logo.jpeg');
+
+// Paleta del formato "Propuesta Económica" de SecureFleet.
+const C = { bar: '#10233F', navy: '#1F3864', teal: '#0FA3B1', footer: '#6FE3EE', gray: '#595959', text: '#000000', sub: '#333333' };
+
+/** Texto de la columna "Cantidad": cantidad, o la periodicidad cuando es un servicio recurrente. */
+function qtyLabel(it) {
+  const q = Number(it.quantity);
+  const qty = Number.isInteger(q) ? String(q) : String(q.toFixed(2));
+  if (it.billing === 'mensual') return q === 1 ? 'Mensual' : `${qty} (mensual)`;
+  if (it.billing === 'anual') return q === 1 ? 'Anual' : `${qty} (anual)`;
+  return qty;
+}
+
+/** Convierte los términos (uno por renglón o en un solo párrafo) en viñetas. */
+function termLines(terms) {
+  if (!terms) return [];
+  const lines = String(terms).split(/\r?\n/).map((l) => l.replace(/^[\s•\-*·]+/, '').trim()).filter(Boolean);
+  if (lines.length > 1) return lines;
+  return String(terms).split(/(?<=\.)\s+(?=[A-ZÁÉÍÓÚÑ])/).map((l) => l.trim()).filter(Boolean);
+}
+
+/** Genera el PDF de la cotización con el formato "Propuesta Económica" y regresa un Buffer. */
 export function renderQuotePdf({ quote, items, contact, settings, seller }) {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'LETTER', margin: 48 });
+    const doc = new PDFDocument({ size: 'LETTER', margins: { top: 40, bottom: 30, left: 57.5, right: 57.5 }, bufferPages: true,
+      info: { Title: `Propuesta Económica ${quote.folio}`, Author: settings.company_name || 'SecureFleet' } });
     const chunks = [];
     doc.on('data', (c) => chunks.push(c));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    const brand = '#0B3D91';
-    const gray = '#555555';
-    const cur = quote.currency || 'MXN';
-    const left = doc.page.margins.left;
-    const width = doc.page.width - left - doc.page.margins.right;
-
-    // Encabezado
-    doc.rect(0, 0, doc.page.width, 90).fill(brand);
-    doc.fillColor('#FFFFFF').fontSize(24).font('Helvetica-Bold').text(settings.company_name || 'SecureFleet', left, 28);
-    doc.fontSize(9).font('Helvetica').text('Rastreo satelital y administración de flotillas', left, 58);
-    doc.fontSize(18).font('Helvetica-Bold').text('COTIZACIÓN', left, 26, { width, align: 'right' });
-    doc.fontSize(10).font('Helvetica').text(quote.folio, left, 50, { width, align: 'right' });
-
-    // Datos de empresa y cliente
-    let y = 110;
-    doc.fillColor(gray).fontSize(8.5).font('Helvetica');
-    const companyLines = [
-      settings.company_legal_name,
-      settings.company_rfc && `RFC: ${settings.company_rfc}`,
-      settings.company_address,
-      [settings.company_phone, settings.company_email].filter(Boolean).join(' · '),
-      settings.company_website,
-    ].filter(Boolean);
-    doc.text(companyLines.join('\n'), left, y, { width: width / 2 - 10 });
-
-    doc.fillColor('#000').font('Helvetica-Bold').fontSize(9).text('Fecha:', left + width / 2, y, { continued: true })
-      .font('Helvetica').text(`  ${fmtDate(quote.issue_date)}`);
-    doc.font('Helvetica-Bold').text('Vigencia:', left + width / 2, doc.y, { continued: true })
-      .font('Helvetica').text(`  ${fmtDate(quote.valid_until)}`);
-    if (seller) {
-      doc.font('Helvetica-Bold').text('Asesor:', left + width / 2, doc.y, { continued: true })
-        .font('Helvetica').text(`  ${seller.name}${seller.email ? ' · ' + seller.email : ''}`);
+    const hasFonts = fs.existsSync(FONT('Regular'));
+    const F = hasFonts
+      ? { r: 'C-R', b: 'C-B', i: 'C-I', bi: 'C-BI' }
+      : { r: 'Helvetica', b: 'Helvetica-Bold', i: 'Helvetica-Oblique', bi: 'Helvetica-BoldOblique' };
+    if (hasFonts) {
+      doc.registerFont('C-R', FONT('Regular'));
+      doc.registerFont('C-B', FONT('Bold'));
+      doc.registerFont('C-I', FONT('Italic'));
+      doc.registerFont('C-BI', FONT('BoldItalic'));
     }
 
-    y = Math.max(doc.y, 110 + companyLines.length * 11) + 16;
-    doc.roundedRect(left, y, width, 58, 4).fill('#F2F5FB');
-    doc.fillColor(brand).font('Helvetica-Bold').fontSize(9).text('PREPARADA PARA', left + 12, y + 8);
-    doc.fillColor('#000').fontSize(11).text(contact.company || contact.name, left + 12, y + 21);
-    doc.font('Helvetica').fontSize(9).fillColor(gray)
-      .text([contact.company ? `Atn: ${contact.name}` : null, contact.email, contact.phone ? `+${contact.phone}` : null]
-        .filter(Boolean).join(' · '), left + 12, y + 37, { width: width - 24 });
-    y += 74;
+    const L = 57.5;
+    const W = doc.page.width - L * 2; // 497
+    const R = L + W;
+    const cur = quote.currency || 'MXN';
+    const PAGE_BOTTOM = 702; // arriba de la franja del pie
+    const website = String(settings.company_website || 'consultingsecurefleet.com.mx').replace(/^https?:\/\//, '').replace(/\/$/, '');
 
-    // Tabla de partidas
-    const cols = [
-      { key: 'description', label: 'Concepto', w: width * 0.4, align: 'left' },
-      { key: 'billing', label: 'Cobro', w: width * 0.1, align: 'center' },
-      { key: 'quantity', label: 'Cant.', w: width * 0.08, align: 'right' },
-      { key: 'unit_price', label: 'P. unitario', w: width * 0.14, align: 'right' },
-      { key: 'discount_pct', label: 'Desc.', w: width * 0.1, align: 'right' },
-      { key: 'line_subtotal', label: 'Importe', w: width * 0.18, align: 'right' },
-    ];
-    const drawHeader = () => {
-      doc.rect(left, y, width, 20).fill(brand);
-      let x = left;
-      doc.fillColor('#FFF').font('Helvetica-Bold').fontSize(8.5);
-      for (const c of cols) {
-        doc.text(c.label, x + 5, y + 6, { width: c.w - 10, align: c.align });
-        x += c.w;
-      }
-      y += 20;
+    const frame = () => {
+      doc.save().rect(L, 0, W, 16.75).fill(C.bar).restore();
+      doc.save().rect(L, 710.9, W, 22).fill(C.bar).restore();
+      doc.font(F.b).fontSize(9).fillColor(C.footer).text(website, L, 716, { width: W, align: 'center', lineBreak: false });
     };
-    drawHeader();
+    frame();
+    doc.on('pageAdded', frame);
 
-    doc.font('Helvetica').fontSize(8.5);
-    items.forEach((it, idx) => {
-      const cells = {
-        description: it.description,
-        billing: BILLING_LABEL[it.billing] || it.billing,
-        quantity: String(it.quantity),
-        unit_price: money(it.unit_price, cur),
-        discount_pct: it.discount_pct ? `${it.discount_pct}%` : '—',
-        line_subtotal: money(it.line_subtotal, cur),
-      };
-      const h = Math.max(18, doc.heightOfString(cells.description, { width: cols[0].w - 10 }) + 10);
-      if (y + h > doc.page.height - 200) {
+    // ---- Encabezado ----
+    if (fs.existsSync(LOGO)) doc.image(LOGO, L + W / 2 - 18.75, 22.75, { width: 37.5, height: 31.5 });
+    doc.font(F.b).fontSize(16).fillColor(C.navy).text(String(settings.company_name || 'SecureFleet').toUpperCase(), L, 56, { width: W, align: 'center' });
+    doc.font(F.r).fontSize(7).fillColor(C.gray).text(settings.company_tagline || 'FLEET INTELLIGENCE', L, 75, { width: W, align: 'center', characterSpacing: 2 });
+    doc.font(F.bi).fontSize(9).fillColor(C.teal).text(settings.company_slogan || 'Seguridad Patrimonial y Monitoreo de Flotas', L, 85, { width: W, align: 'center' });
+    doc.moveTo(L, 114.2).lineTo(R, 114.2).lineWidth(1).strokeColor(C.teal).stroke();
+
+    doc.font(F.b).fontSize(14).fillColor(C.navy).text('PROPUESTA ECONÓMICA', L, 122, { width: W, align: 'center' });
+    let y = 140;
+    if (quote.title) {
+      doc.font(F.i).fontSize(10).fillColor(C.sub).text(quote.title, L, y, { width: W, align: 'center' });
+      y = doc.y;
+    }
+    y = Math.max(y + 8, 158);
+
+    // ---- Datos del cliente ----
+    const field = (label, value, x, yy, opts = {}) => {
+      doc.font(F.b).fontSize(10.5).fillColor(C.text).text(`${label}: `, x, yy, { continued: true, ...opts })
+        .font(F.r).text(value || '—', opts);
+    };
+    const validDays = quote.valid_until && quote.issue_date
+      ? Math.round((new Date(quote.valid_until + 'T12:00:00') - new Date(quote.issue_date + 'T12:00:00')) / 86400000)
+      : null;
+    field('Empresa', contact.company || contact.name, L, y);
+    if (contact.company) field('Contacto', contact.name, L, doc.y + 2);
+    const fy = doc.y + 2;
+    doc.font(F.b).fontSize(10.5).fillColor(C.text).text('Fecha: ', L, fy, { continued: true })
+      .font(F.r).text(fmtDate(quote.issue_date), { continued: true })
+      .font(F.b).text('      Vigencia: ', { continued: true })
+      .font(F.r).text(validDays ? `${validDays} días naturales` : fmtDate(quote.valid_until), { continued: true })
+      .font(F.b).text('      Folio: ', { continued: true })
+      .font(F.r).text(quote.folio);
+    if (seller) field(`Asesor ${settings.company_name || 'SecureFleet'}`, seller.name, L, doc.y + 2);
+
+    // ---- Tabla ----
+    const col = { concept: { x: L + 5.5, w: 200 }, qty: { x: L + 200, w: 97 }, amount: { x: R - 150, w: 144.5 } };
+    const header = (yy) => {
+      doc.font(F.b).fontSize(9.5).fillColor(C.navy);
+      doc.text('CONCEPTO', col.concept.x, yy, { width: col.concept.w, lineBreak: false });
+      doc.text('CANTIDAD', col.qty.x, yy, { width: col.qty.w, align: 'center', lineBreak: false });
+      doc.text('IMPORTE', col.amount.x, yy, { width: col.amount.w, align: 'right', lineBreak: false });
+      doc.moveTo(L, yy + 17).lineTo(R, yy + 17).lineWidth(1.2).strokeColor(C.navy).stroke();
+      return yy + 26;
+    };
+    y = header(doc.y + 14);
+
+    for (const it of items) {
+      const concept = it.discount_pct > 0 ? `${it.description} (descuento ${it.discount_pct}%)` : it.description;
+      doc.font(F.r).fontSize(9.5);
+      const h = doc.heightOfString(concept, { width: col.concept.w, align: 'justify', lineGap: 1.5 });
+      if (y + h > PAGE_BOTTOM - 20) {
         doc.addPage();
-        y = doc.page.margins.top;
-        drawHeader();
-        doc.font('Helvetica').fontSize(8.5);
+        y = header(40);
       }
-      if (idx % 2 === 1) doc.rect(left, y, width, h).fill('#F7F7F7');
-      let x = left;
-      doc.fillColor('#000');
-      for (const c of cols) {
-        doc.text(cells[c.key], x + 5, y + 5, { width: c.w - 10, align: c.align });
-        x += c.w;
-      }
-      y += h;
-    });
-    doc.moveTo(left, y).lineTo(left + width, y).strokeColor('#DDD').stroke();
+      doc.font(F.r).fontSize(9.5).fillColor(C.text).text(concept, col.concept.x, y, { width: col.concept.w, align: 'justify', lineGap: 1.5 });
+      doc.text(qtyLabel(it), col.qty.x, y, { width: col.qty.w, align: 'center' });
+      doc.font(F.b).text(money(it.line_subtotal, cur), col.amount.x, y, { width: col.amount.w, align: 'right' });
+      y += h + 12;
+    }
+    doc.moveTo(L, y - 4).lineTo(R, y - 4).lineWidth(1.2).strokeColor(C.navy).stroke();
+    y += 12;
 
-    // Totales
-    y += 10;
-    const tx = left + width * 0.55;
-    const tw = width * 0.45;
-    const row = (label, value, bold = false) => {
-      doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(bold ? 11 : 9).fillColor('#000');
-      doc.text(label, tx, y, { width: tw * 0.5 });
-      doc.text(value, tx + tw * 0.5, y, { width: tw * 0.5, align: 'right' });
-      y += bold ? 18 : 14;
+    // ---- Totales (antes de IVA) ----
+    const sum = (b) => items.filter((it) => (it.billing || 'unico') === b).reduce((a, it) => a + Number(it.line_subtotal || 0), 0);
+    const initial = sum('unico');
+    const monthly = sum('mensual');
+    const annual = sum('anual');
+    const totals = [];
+    if (initial > 0 || (!monthly && !annual)) totals.push(`${settings.quote_label_initial || 'INVERSIÓN INICIAL'} (${cur}, antes de IVA): ${money(initial, cur)}`);
+    if (monthly > 0) totals.push(`${settings.quote_label_monthly || 'SERVICIO MENSUAL'} (${cur}, antes de IVA): ${money(monthly, cur)} / mes`);
+    if (annual > 0) totals.push(`${settings.quote_label_annual || 'SERVICIO ANUAL'} (${cur}, antes de IVA): ${money(annual, cur)} / año`);
+
+    const ensure = (need) => {
+      if (y + need > PAGE_BOTTOM) {
+        doc.addPage();
+        y = 40;
+      }
     };
-    row('Subtotal', money(quote.subtotal, cur));
-    if (quote.discount_total > 0) row('Descuento', `-${money(quote.discount_total, cur)}`);
-    row('IVA', money(quote.tax_total, cur));
-    doc.moveTo(tx, y).lineTo(tx + tw, y).strokeColor(brand).stroke();
-    y += 5;
-    row(`Total ${cur}`, money(quote.total, cur), true);
-    if (quote.recurring_total > 0) {
-      doc.font('Helvetica-Oblique').fontSize(8).fillColor(gray)
-        .text(`Incluye ${money(quote.recurring_total, cur)} (IVA incluido) de servicios recurrentes.`, tx, y, { width: tw, align: 'right' });
+    ensure(40);
+    totals.forEach((t, i) => {
+      const lineY = y;
+      doc.font(F.b).fontSize(10).fillColor(C.navy).text(t, L, lineY, { width: W - 120 });
+      y = doc.y + 1;
+      if (i === totals.length - 1) {
+        doc.font(F.r).fontSize(8).fillColor(C.gray)
+          .text(`Total con IVA: ${money(quote.total, cur)}`, R - 120, lineY + 2, { width: 120, align: 'right' });
+      }
+    });
+    y += 3;
+
+    if (quote.notes) {
+      doc.font(F.i).fontSize(7.5).fillColor(C.gray);
+      ensure(doc.heightOfString(quote.notes, { width: W }) + 4);
+      doc.text(quote.notes, L, y, { width: W, align: 'justify', lineGap: 1.5 });
       y = doc.y + 6;
     }
 
-    // Notas y condiciones
-    y += 12;
-    const block = (title, text) => {
-      if (!text) return;
-      if (y > doc.page.height - 120) {
-        doc.addPage();
-        y = doc.page.margins.top;
+    // ---- Firmas ----
+    ensure(50);
+    const sigY = y + 18;
+    const half = (W - 11) / 2;
+    if (seller) doc.font(F.r).fontSize(9.5).fillColor(C.text).text(seller.name, L + 5.5, sigY - 14, { width: half - 5 });
+    doc.moveTo(L + 5.5, sigY).lineTo(L + 5.5 + half - 5, sigY).lineWidth(0.8).strokeColor('#000').stroke();
+    doc.moveTo(L + 5.5 + half + 5, sigY).lineTo(R - 5.5, sigY).stroke();
+    doc.font(F.r).fontSize(7.5).fillColor(C.gray);
+    doc.text(`Nombre y Firma del Asesor ${settings.company_name || 'SecureFleet'}`, L + 5.5, sigY + 14, { width: half });
+    doc.text('Nombre y Firma de la Aceptación de la Propuesta', L + 5.5 + half + 5, sigY + 14, { width: half });
+    y = sigY + 32;
+
+    // ---- Condiciones ----
+    const terms = termLines(quote.terms);
+    if (terms.length) {
+      ensure(40);
+      doc.font(F.b).fontSize(10).fillColor(C.navy).text('Condiciones', L, y);
+      y = doc.y + 4;
+      for (const t of terms) {
+        doc.font(F.r).fontSize(9);
+        const h = doc.heightOfString(t, { width: W - 20 });
+        ensure(h + 4);
+        doc.font(F.b).fillColor(C.navy).text('•', L + 9.5, y, { lineBreak: false });
+        doc.font(F.r).fillColor(C.text).text(t, L + 17, y, { width: W - 20 });
+        y = doc.y + 2;
       }
-      doc.fillColor(brand).font('Helvetica-Bold').fontSize(9).text(title, left, y);
-      doc.fillColor(gray).font('Helvetica').fontSize(8.5).text(text, left, doc.y + 3, { width });
-      y = doc.y + 12;
-    };
-    block('Notas', quote.notes);
-    block('Términos y condiciones', quote.terms);
+    }
 
     doc.end();
   });

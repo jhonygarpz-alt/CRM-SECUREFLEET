@@ -74,6 +74,7 @@ export default function quoteRoutes(db, wa) {
       issue_date: issue,
       valid_until: body.valid_until || existing?.valid_until || addDays(issue, Number(settings.quote_validity_days) || 15),
       currency: body.currency || existing?.currency || settings.default_currency || 'MXN',
+      title: body.title === undefined ? existing?.title ?? null : body.title || null,
       notes: body.notes === undefined ? existing?.notes ?? null : body.notes,
       terms: body.terms === undefined ? existing?.terms ?? settings.quote_terms : body.terms,
       subtotal: calc.subtotal,
@@ -88,9 +89,9 @@ export default function quoteRoutes(db, wa) {
   r.post('/quotes', (req, res) => {
     const { data, lines, settings } = upsert(req);
     const id = db.transaction(() => {
-      const info = db.prepare(`INSERT INTO quotes (folio, contact_id, deal_id, status, issue_date, valid_until, currency, notes, terms,
+      const info = db.prepare(`INSERT INTO quotes (folio, contact_id, deal_id, status, issue_date, valid_until, currency, title, notes, terms,
           subtotal, discount_total, tax_total, total, recurring_total, created_by) VALUES (@folio, @contact_id, @deal_id, @status,
-          @issue_date, @valid_until, @currency, @notes, @terms, @subtotal, @discount_total, @tax_total, @total, @recurring_total, @created_by)`)
+          @issue_date, @valid_until, @currency, @title, @notes, @terms, @subtotal, @discount_total, @tax_total, @total, @recurring_total, @created_by)`)
         .run({ ...data, folio: nextFolio(settings.quote_prefix || 'COT'), created_by: req.user.id });
       saveItems(info.lastInsertRowid, lines);
       if (data.deal_id) {
@@ -107,7 +108,7 @@ export default function quoteRoutes(db, wa) {
     const { data, lines } = upsert(req, existing);
     db.transaction(() => {
       db.prepare(`UPDATE quotes SET contact_id=@contact_id, deal_id=@deal_id, status=@status, issue_date=@issue_date,
-          valid_until=@valid_until, currency=@currency, notes=@notes, terms=@terms, subtotal=@subtotal,
+          valid_until=@valid_until, currency=@currency, title=@title, notes=@notes, terms=@terms, subtotal=@subtotal,
           discount_total=@discount_total, tax_total=@tax_total, total=@total, recurring_total=@recurring_total,
           updated_at=datetime('now') WHERE id=@id`).run({ ...data, id: existing.id });
       saveItems(existing.id, lines);
@@ -123,10 +124,10 @@ export default function quoteRoutes(db, wa) {
     const src = load(req.params.id);
     const settings = getSettings(db);
     const id = db.transaction(() => {
-      const info = db.prepare(`INSERT INTO quotes (folio, contact_id, deal_id, status, issue_date, valid_until, currency, notes, terms,
-          subtotal, discount_total, tax_total, total, recurring_total, created_by) VALUES (?, ?, ?, 'borrador', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      const info = db.prepare(`INSERT INTO quotes (folio, contact_id, deal_id, status, issue_date, valid_until, currency, title, notes, terms,
+          subtotal, discount_total, tax_total, total, recurring_total, created_by) VALUES (?, ?, ?, 'borrador', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(nextFolio(settings.quote_prefix || 'COT'), src.contact_id, src.deal_id, today(),
-          addDays(today(), Number(settings.quote_validity_days) || 15), src.currency, src.notes, src.terms, src.subtotal,
+          addDays(today(), Number(settings.quote_validity_days) || 15), src.currency, src.title, src.notes, src.terms, src.subtotal,
           src.discount_total, src.tax_total, src.total, src.recurring_total, req.user.id);
       saveItems(info.lastInsertRowid, src.items);
       return info.lastInsertRowid;
