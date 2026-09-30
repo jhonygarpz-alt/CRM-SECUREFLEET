@@ -43,9 +43,9 @@ export function seedDemo(db) {
   if (db.prepare('SELECT COUNT(*) AS n FROM contacts').get().n > 0) return;
   const insC = db.prepare(`INSERT INTO contacts (type, name, company, position, email, phone, source, status, fleet_size, city, owner_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`);
-  const c1 = insC.run('lead', 'Laura Méndez', 'Transportes del Bajío', 'Gerente de logística', 'laura@ejemplo.com', '5214771234567', 'Sitio web', 'calificado', 35, 'León').lastInsertRowid;
-  const c2 = insC.run('lead', 'Carlos Ruiz', 'Distribuidora Ruiz', 'Director', 'carlos@ejemplo.com', '5215512345678', 'WhatsApp', 'nuevo', 8, 'CDMX').lastInsertRowid;
-  const c3 = insC.run('cliente', 'Ana Torres', 'Constructora Torres', 'Compras', 'ana@ejemplo.com', '5213312345678', 'Referido', 'cliente', 12, 'Guadalajara').lastInsertRowid;
+  const c1 = insC.run('lead', 'Laura Méndez', 'Transportes del Bajío', 'Gerente de logística', 'laura@ejemplo.com', '524771234567', 'Sitio web', 'calificado', 35, 'León').lastInsertRowid;
+  const c2 = insC.run('lead', 'Carlos Ruiz', 'Distribuidora Ruiz', 'Director', 'carlos@ejemplo.com', '525512345678', 'WhatsApp', 'nuevo', 8, 'CDMX').lastInsertRowid;
+  const c3 = insC.run('cliente', 'Ana Torres', 'Constructora Torres', 'Compras', 'ana@ejemplo.com', '523312345678', 'Referido', 'cliente', 12, 'Guadalajara').lastInsertRowid;
   const insD = db.prepare(`INSERT INTO deals (title, contact_id, stage, value, probability, units, expected_close, owner_id, closed_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`);
   insD.run('Rastreo flotilla 35 tractocamiones', c1, 'demo', 180000, 40, 35, null, null);
   insD.run('GPS para 8 camionetas de reparto', c2, 'prospecto', 25000, 10, 8, null, null);

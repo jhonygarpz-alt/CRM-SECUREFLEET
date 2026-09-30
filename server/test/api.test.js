@@ -93,7 +93,7 @@ test('flujo completo: lead por WhatsApp → respuesta → cotización enviada po
   assert.equal(contacts.length, 1);
   const lead = contacts[0];
   assert.equal(lead.source, 'WhatsApp');
-  assert.equal(lead.phone, '5215511112222');
+  assert.equal(lead.phone, '525511112222');
 
   const conv = (await api(`/whatsapp/conversations/${lead.id}`)).data;
   assert.equal(conv.messages.length, 1);
@@ -107,7 +107,7 @@ test('flujo completo: lead por WhatsApp → respuesta → cotización enviada po
   assert.equal(sent.status, 201);
   const call = graphCalls.at(-1);
   assert.match(call.url, /\/123\/messages$/);
-  assert.deepEqual(JSON.parse(call.opts.body).to, '5215511112222');
+  assert.deepEqual(JSON.parse(call.opts.body).to, '525511112222');
 
   // 3. Estado "read" desde Meta actualiza el mensaje
   await signedWebhook({ entry: [{ changes: [{ value: { statuses: [{ id: sent.data.wa_message_id, status: 'read' }] } }] }] });
@@ -160,6 +160,14 @@ test('fuera de la ventana de 24 h se exige plantilla', async () => {
   const payload = JSON.parse(graphCalls.at(-1).opts.body);
   assert.equal(payload.type, 'template');
   assert.equal(payload.template.components[0].parameters[0].text, 'Ana');
+});
+
+test('celular mexicano 521… se une al contacto existente 52…', async () => {
+  const c = (await api('/contacts', { method: 'POST', body: { name: 'Mismo Cliente', phone: '55 1111 3333' } })).data;
+  assert.equal(c.phone, '525511113333');
+  await signedWebhook(incoming('5215511113333', 'hola', 'wamid.mx1', 'Otro nombre'));
+  assert.equal((await api('/contacts?q=5511113333')).data.length, 1);
+  assert.equal((await api(`/whatsapp/conversations/${c.id}`)).data.messages.length, 1);
 });
 
 test('teléfono duplicado devuelve 409', async () => {

@@ -14,6 +14,9 @@ export function normalizePhone(raw, defaultCountry = process.env.DEFAULT_COUNTRY
   if (!digits) return null;
   if (digits.startsWith('00')) digits = digits.slice(2);
   if (digits.length === 10) digits = defaultCountry + digits;
+  // WhatsApp entrega los celulares de México como 521 + 10 dígitos; se guardan como 52 + 10
+  // para que el mismo cliente no quede duplicado (y la API acepta el envío a 52…).
+  if (digits.length === 13 && digits.startsWith('521')) digits = '52' + digits.slice(3);
   return digits;
 }
 

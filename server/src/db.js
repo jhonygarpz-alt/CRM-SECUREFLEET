@@ -181,6 +181,10 @@ export function openDb(file = process.env.DB_PATH || './data/crm.db') {
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
 
+  // Unifica teléfonos mexicanos guardados como 521XXXXXXXXXX → 52XXXXXXXXXX.
+  db.exec(`UPDATE OR IGNORE contacts SET phone = '52' || substr(phone, 4)
+           WHERE length(phone) = 13 AND phone LIKE '521%'`);
+
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) insertSetting.run(k, v);
 
