@@ -15,12 +15,21 @@ say() { printf '\n\033[1;32m▶ %s\033[0m\n' "$*"; }
 die() { printf '\n\033[1;31m✖ %s\033[0m\n' "$*"; exit 1; }
 
 PROJECT=$(gcloud config get-value project 2>/dev/null || true)
+# Ignora un proyecto configurado con un ID inválido (p. ej. texto pegado por error).
+if [ -n "$PROJECT" ] && ! [[ "$PROJECT" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]]; then
+  gcloud config unset project >/dev/null 2>&1 || true
+  PROJECT=""
+fi
 if [ -z "$PROJECT" ]; then
   PROJECTS=$(gcloud projects list --format="value(projectId)" 2>/dev/null || true)
   if [ -n "$PROJECTS" ]; then
     echo "Tus proyectos de Google Cloud:"
     gcloud projects list --format="table(projectId,name)"
-    read -rp "Escribe el PROJECT_ID donde instalar el CRM (o Enter para crear uno nuevo): " PROJECT
+    while true; do
+      read -rp "Escribe el PROJECT_ID donde instalar el CRM (o Enter para crear uno nuevo): " PROJECT
+      [ -z "$PROJECT" ] || echo "$PROJECTS" | grep -qx "$PROJECT" && break
+      echo "Ese proyecto no está en la lista. Copia el ID exacto o presiona Enter."
+    done
   fi
   if [ -z "$PROJECT" ]; then
     PROJECT="securefleet-crm-$(openssl rand -hex 3)"
