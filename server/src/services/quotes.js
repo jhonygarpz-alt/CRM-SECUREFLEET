@@ -109,13 +109,24 @@ export function renderQuotePdf({ quote, items, contact, settings, seller }) {
     const W = doc.page.width - L * 2; // 497
     const R = L + W;
     const cur = quote.currency || 'MXN';
-    const PAGE_BOTTOM = 702; // arriba de la franja del pie
+    const PAGE_BOTTOM = 686; // arriba de los datos fiscales y la franja del pie
     const website = String(settings.company_website || 'consultingsecurefleet.com.mx').replace(/^https?:\/\//, '').replace(/\/$/, '');
 
     const frame = () => {
       doc.save().rect(L, 0, W, 16.75).fill(C.bar).restore();
       doc.save().rect(L, 710.9, W, 22).fill(C.bar).restore();
       doc.font(F.b).fontSize(9).fillColor(C.footer).text(website, L, 716, { width: W, align: 'center', lineBreak: false });
+      // Datos fiscales del emisor, en pequeño, arriba de la franja del pie.
+      const fiscal = [
+        settings.company_legal_name,
+        settings.company_rfc && `RFC: ${settings.company_rfc}`,
+        settings.company_address,
+        settings.company_phone && `Tel. ${settings.company_phone}`,
+        settings.company_email,
+      ].filter(Boolean).join('  ·  ');
+      if (fiscal) {
+        doc.font(F.r).fontSize(7).fillColor(C.gray).text(fiscal, L, 697, { width: W, align: 'center', lineBreak: false, ellipsis: true });
+      }
     };
     frame();
     doc.on('pageAdded', frame);
@@ -155,7 +166,7 @@ export function renderQuotePdf({ quote, items, contact, settings, seller }) {
     if (seller) field(`Asesor ${settings.company_name || 'SecureFleet'}`, seller.name, L, doc.y + 2);
 
     // ---- Tabla ----
-    const col = { concept: { x: L + 5.5, w: 200 }, qty: { x: L + 200, w: 97 }, amount: { x: R - 150, w: 144.5 } };
+    const col = { concept: { x: L + 5.5, w: 235 }, qty: { x: L + 250, w: 90 }, amount: { x: R - 150, w: 144.5 } };
     const header = (yy) => {
       doc.font(F.b).fontSize(9.5).fillColor(C.navy);
       doc.text('CONCEPTO', col.concept.x, yy, { width: col.concept.w, lineBreak: false });
@@ -177,7 +188,7 @@ export function renderQuotePdf({ quote, items, contact, settings, seller }) {
       doc.font(F.r).fontSize(9.5).fillColor(C.text).text(concept, col.concept.x, y, { width: col.concept.w, align: 'justify', lineGap: 1.5 });
       doc.text(qtyLabel(it), col.qty.x, y, { width: col.qty.w, align: 'center' });
       doc.font(F.b).text(money(it.line_subtotal, cur), col.amount.x, y, { width: col.amount.w, align: 'right' });
-      y += h + 12;
+      y += h + 8;
     }
     doc.moveTo(L, y - 4).lineTo(R, y - 4).lineWidth(1.2).strokeColor(C.navy).stroke();
     y += 12;
@@ -198,17 +209,39 @@ export function renderQuotePdf({ quote, items, contact, settings, seller }) {
         y = 40;
       }
     };
-    ensure(40);
-    totals.forEach((t, i) => {
-      const lineY = y;
-      doc.font(F.b).fontSize(10).fillColor(C.navy).text(t, L, lineY, { width: W - 120 });
-      y = doc.y + 1;
-      if (i === totals.length - 1) {
-        doc.font(F.r).fontSize(8).fillColor(C.gray)
-          .text(`Total con IVA: ${money(quote.total, cur)}`, R - 120, lineY + 2, { width: 120, align: 'right' });
-      }
-    });
-    y += 3;
+    // Izquierda: inversión inicial / servicios recurrentes. Derecha: desglose Importe, IVA y Total.
+    ensure(78);
+    const boxW = 190;
+    const boxX = R - boxW;
+    const top = y;
+    doc.font(F.b).fontSize(10).fillColor(C.navy);
+    for (const t of totals) {
+      doc.text(t, L, y, { width: W - boxW - 14 });
+      y = doc.y + 2;
+    }
+    const leftBottom = y;
+
+    const rates = [...new Set(items.map((it) => Number(it.tax_rate)))];
+    const ivaLabel = rates.length === 1 ? `IVA (${Math.round(rates[0] * 100)}%)` : 'IVA';
+    const importe = Number(quote.subtotal) - Number(quote.discount_total || 0);
+    const rows = [['Importe (antes de IVA)', money(importe, cur)], [ivaLabel, money(quote.tax_total, cur)]];
+    const boxH = rows.length * 15 + 34;
+    doc.save().rect(boxX, top - 4, boxW, boxH).fill('#F2F5FB').restore();
+    let by = top + 2;
+    for (const [label, value] of rows) {
+      doc.font(F.r).fontSize(9.5).fillColor(C.text).text(label, boxX + 10, by, { width: 100 });
+      doc.text(value, boxX + 90, by, { width: boxW - 100, align: 'right' });
+      by += 15;
+    }
+    doc.moveTo(boxX + 10, by).lineTo(R - 10, by).lineWidth(1).strokeColor(C.navy).stroke();
+    by += 5;
+    doc.font(F.b).fontSize(13).fillColor(C.navy).text(`TOTAL ${cur}`, boxX + 10, by, { width: 90 });
+    doc.text(money(quote.total, cur), boxX + 80, by, { width: boxW - 90, align: 'right' });
+    if (monthly > 0 || annual > 0) {
+      doc.font(F.i).fontSize(7.5).fillColor(C.gray)
+        .text(`El total con IVA incluye el primer ${monthly > 0 ? 'mes' : 'año'} de los servicios recurrentes.`, L, leftBottom + 2, { width: W - boxW - 14 });
+    }
+    y = Math.max(doc.y, top - 4 + boxH) + 6;
 
     if (quote.notes) {
       doc.font(F.i).fontSize(7.5).fillColor(C.gray);
@@ -219,15 +252,15 @@ export function renderQuotePdf({ quote, items, contact, settings, seller }) {
 
     // ---- Firmas ----
     ensure(50);
-    const sigY = y + 18;
+    const sigY = y + 16;
     const half = (W - 11) / 2;
     if (seller) doc.font(F.r).fontSize(9.5).fillColor(C.text).text(seller.name, L + 5.5, sigY - 14, { width: half - 5 });
     doc.moveTo(L + 5.5, sigY).lineTo(L + 5.5 + half - 5, sigY).lineWidth(0.8).strokeColor('#000').stroke();
     doc.moveTo(L + 5.5 + half + 5, sigY).lineTo(R - 5.5, sigY).stroke();
     doc.font(F.r).fontSize(7.5).fillColor(C.gray);
-    doc.text(`Nombre y Firma del Asesor ${settings.company_name || 'SecureFleet'}`, L + 5.5, sigY + 14, { width: half });
-    doc.text('Nombre y Firma de la Aceptación de la Propuesta', L + 5.5 + half + 5, sigY + 14, { width: half });
-    y = sigY + 32;
+    doc.text(`Nombre y Firma del Asesor ${settings.company_name || 'SecureFleet'}`, L + 5.5, sigY + 5, { width: half });
+    doc.text('Nombre y Firma de la Aceptación de la Propuesta', L + 5.5 + half + 5, sigY + 5, { width: half });
+    y = sigY + 22;
 
     // ---- Condiciones ----
     const terms = termLines(quote.terms);
