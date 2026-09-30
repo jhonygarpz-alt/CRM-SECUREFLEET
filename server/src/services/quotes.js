@@ -85,7 +85,7 @@ function termLines(terms) {
 }
 
 /** Genera el PDF de la cotización con el formato "Propuesta Económica" y regresa un Buffer. */
-export function renderQuotePdf({ quote, items, contact, settings, seller }) {
+export function renderQuotePdf({ quote, items, contact, settings, seller, logo }) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'LETTER', margins: { top: 40, bottom: 30, left: 57.5, right: 57.5 }, bufferPages: true,
       info: { Title: `Propuesta Económica ${quote.folio}`, Author: settings.company_name || 'SecureFleet' } });
@@ -132,7 +132,14 @@ export function renderQuotePdf({ quote, items, contact, settings, seller }) {
     doc.on('pageAdded', frame);
 
     // ---- Encabezado ----
-    if (fs.existsSync(LOGO)) doc.image(LOGO, L + W / 2 - 18.75, 22.75, { width: 37.5, height: 31.5 });
+    const logoSrc = logo || (fs.existsSync(LOGO) ? LOGO : null);
+    if (logoSrc) {
+      try {
+        doc.image(logoSrc, L + W / 2 - 60, 22.75, { fit: [120, 31.5], align: 'center', valign: 'center' });
+      } catch {
+        /* imagen no compatible: se omite el logo */
+      }
+    }
     doc.font(F.b).fontSize(16).fillColor(C.navy).text(String(settings.company_name || 'SecureFleet').toUpperCase(), L, 56, { width: W, align: 'center' });
     doc.font(F.r).fontSize(7).fillColor(C.gray).text(settings.company_tagline || 'FLEET INTELLIGENCE', L, 75, { width: W, align: 'center', characterSpacing: 2 });
     doc.font(F.bi).fontSize(9).fillColor(C.teal).text(settings.company_slogan || 'Seguridad Patrimonial y Monitoreo de Flotas', L, 85, { width: W, align: 'center' });

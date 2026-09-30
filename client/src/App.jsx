@@ -17,9 +17,17 @@ import Settings from './pages/Settings.jsx';
 const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
 
+const BrandContext = createContext({ name: 'SecureFleet', version: '0' });
+export const useBrand = () => useContext(BrandContext);
+export const logoUrl = (brand) => `/branding/logo?v=${brand.version}`;
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(Boolean(getToken()));
+  const [brand, setBrand] = useState({ name: 'SecureFleet', tagline: '', version: '0' });
+  const refreshBrand = () => fetch('/api/branding').then((r) => r.json()).then(setBrand).catch(() => {});
+  useEffect(() => { refreshBrand(); }, []);
+  useEffect(() => { document.title = `${brand.name} CRM`; }, [brand.name]);
   const location = useLocation();
 
   useEffect(() => {
@@ -33,6 +41,7 @@ export default function App() {
   if (loading) return <div className="center-screen">Cargando…</div>;
 
   return (
+    <BrandContext.Provider value={{ ...brand, refresh: refreshBrand }}>
     <AuthContext.Provider value={{ user, login, logout }}>
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
@@ -53,5 +62,6 @@ export default function App() {
         </Route>
       </Routes>
     </AuthContext.Provider>
+    </BrandContext.Provider>
   );
 }

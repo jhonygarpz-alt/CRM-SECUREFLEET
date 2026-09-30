@@ -182,3 +182,30 @@ test('páginas legales públicas', async () => {
     assert.match(await res.text(), /SecureFleet/);
   }
 });
+
+test('app instalable y logo personalizable', async () => {
+  const root = base.replace('/api', '');
+  const manifest = await (await fetch(`${root}/manifest.webmanifest`)).json();
+  assert.equal(manifest.display, 'standalone');
+  assert.ok(manifest.icons.some((i) => i.sizes === '512x512'));
+  const icon = await fetch(`${root}/branding/icon-192.png`);
+  assert.equal(icon.headers.get('content-type'), 'image/png');
+  assert.equal((await (await fetch(`${root}/api/branding`)).json()).customLogo, false);
+
+  // PNG 1x1 como logo de prueba
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  assert.equal((await api('/branding/logo', { method: 'PUT', body: { logo: png, icon192: png, icon512: png } })).status, 200);
+  assert.equal((await (await fetch(`${root}/api/branding`)).json()).customLogo, true);
+  const logo = await fetch(`${root}/branding/logo`);
+  assert.equal(logo.headers.get('content-type'), 'image/png');
+  const bad = await api('/branding/logo', { method: 'PUT', body: { logo: 'data:text/plain;base64,aGk=', icon192: png, icon512: png } });
+  assert.equal(bad.status, 400);
+
+  // El PDF se genera con el logo personalizado
+  const quotes = (await api('/quotes')).data;
+  const pdf = await api(`/quotes/${quotes[0].id}/pdf`);
+  assert.equal(Buffer.from(pdf.data).subarray(0, 4).toString(), '%PDF');
+
+  assert.equal((await api('/branding/logo', { method: 'DELETE' })).status, 200);
+  assert.equal((await (await fetch(`${root}/api/branding`)).json()).customLogo, false);
+});

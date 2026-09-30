@@ -4,6 +4,7 @@ import { getSettings } from '../db.js';
 import { QUOTE_STATUSES } from '../constants.js';
 import { computeQuote, renderQuotePdf, money } from '../services/quotes.js';
 import { recordOutgoing, windowOpen } from '../services/messaging.js';
+import { getBrandAsset } from './branding.js';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const addDays = (d, n) => {
@@ -144,7 +145,7 @@ export default function quoteRoutes(db, wa) {
   const buildPdf = async (quote) => {
     const contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(quote.contact_id);
     const seller = quote.created_by ? db.prepare('SELECT name, email FROM users WHERE id = ?').get(quote.created_by) : null;
-    return renderQuotePdf({ quote, items: quote.items, contact, settings: getSettings(db), seller });
+    return renderQuotePdf({ quote, items: quote.items, contact, settings: getSettings(db), seller, logo: getBrandAsset(db, 'logo').data });
   };
 
   r.get('/quotes/:id/pdf', asyncHandler(async (req, res) => {

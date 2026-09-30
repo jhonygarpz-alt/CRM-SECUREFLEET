@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { api } from '../api.js';
-import { useAuth } from '../App.jsx';
+import { useAuth, useBrand, logoUrl } from '../App.jsx';
 
 export default function Login() {
   const { login } = useAuth();
+  const brand = useBrand();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -22,7 +23,10 @@ export default function Login() {
   return (
     <div className="login">
       <form className="card login-card" onSubmit={submit}>
-        <div className="brand big"><span className="brand-mark">SF</span><div><strong>SecureFleet</strong><small>CRM comercial</small></div></div>
+        <div className="brand big login-brand">
+          <img className="brand-logo big" src={logoUrl(brand)} alt="" />
+          <div><strong>{brand.name}</strong><small>CRM comercial</small></div>
+        </div>
         <label>Correo<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus /></label>
         <label>Contraseña<input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
         {error && <p className="error">{error}</p>}

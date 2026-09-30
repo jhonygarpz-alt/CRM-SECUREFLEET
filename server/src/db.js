@@ -147,6 +147,13 @@ CREATE TABLE IF NOT EXISTS quick_replies (
   body TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS brand_assets (
+  key TEXT PRIMARY KEY,
+  mime TEXT NOT NULL,
+  data BLOB NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT

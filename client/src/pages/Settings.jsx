@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { useAuth } from '../App.jsx';
 import { toast } from '../components/Toast.jsx';
 import ConnectWhatsApp from '../components/ConnectWhatsApp.jsx';
+import BrandSettings, { InstallAppCard } from '../components/BrandSettings.jsx';
 
 export default function Settings() {
   const { user } = useAuth();
@@ -26,6 +27,9 @@ export default function Settings() {
   return (
     <div className="page">
       <h1>Configuración</h1>
+
+      <InstallAppCard />
+      <BrandSettings isAdmin={isAdmin} />
 
       <section className="card">
         <h3>Conexión con WhatsApp Business</h3>

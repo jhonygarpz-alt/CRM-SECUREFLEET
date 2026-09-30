@@ -15,6 +15,7 @@ import activityRoutes from './routes/activities.js';
 import dashboardRoutes from './routes/dashboard.js';
 import settingsRoutes from './routes/settings.js';
 import legalRoutes from './routes/legal.js';
+import { brandingPublicRoutes, brandingAdminRoutes } from './routes/branding.js';
 import { whatsappRoutes, whatsappWebhookRoutes } from './routes/whatsapp.js';
 
 export function createApp(db, { wa = createDynamicWhatsAppClient(db), signup = createSignupClient() } = {}) {
@@ -27,6 +28,8 @@ export function createApp(db, { wa = createDynamicWhatsAppClient(db), signup = c
   app.get('/api/health', (_req, res) => res.json({ ok: true, whatsapp: wa.configured ? 'live' : 'simulacion' }));
 
   // Rutas públicas
+  app.use(brandingPublicRoutes(db));
+  app.use('/api', brandingAdminRoutes(db));
   app.use('/api', whatsappWebhookRoutes(db, wa));
   app.use('/api', authRoutes(db));
 

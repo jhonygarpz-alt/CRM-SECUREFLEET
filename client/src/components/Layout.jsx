@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { useAuth } from '../App.jsx';
+import { useAuth, useBrand, logoUrl } from '../App.jsx';
 import { api } from '../api.js';
 import { Toaster } from './Toast.jsx';
 
@@ -17,6 +17,21 @@ const NAV = [
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const brand = useBrand();
+  const [canInstall, setCanInstall] = useState(Boolean(window.__installPrompt));
+  useEffect(() => {
+    const on = () => setCanInstall(true);
+    window.addEventListener('installable', on);
+    return () => window.removeEventListener('installable', on);
+  }, []);
+  async function install() {
+    const p = window.__installPrompt;
+    if (!p) return;
+    p.prompt();
+    await p.userChoice.catch(() => {});
+    window.__installPrompt = null;
+    setCanInstall(false);
+  }
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
 
@@ -29,16 +44,16 @@ export default function Layout() {
   }, []);
 
   useEffect(() => {
-    document.title = unread > 0 ? `(${unread}) SecureFleet CRM` : 'SecureFleet CRM';
-  }, [unread]);
+    document.title = unread > 0 ? `(${unread}) ${brand.name} CRM` : `${brand.name} CRM`;
+  }, [unread, brand.name]);
 
   return (
     <div className="shell">
       <aside className={`sidebar ${open ? 'open' : ''}`}>
         <div className="brand">
-          <span className="brand-mark">SF</span>
+          <img className="brand-logo" src={logoUrl(brand)} alt="" />
           <div>
-            <strong>SecureFleet</strong>
+            <strong>{brand.name}</strong>
             <small>CRM comercial</small>
           </div>
         </div>
@@ -51,6 +66,9 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
+        {canInstall && (
+          <button className="install-btn" onClick={install}>📲 Instalar app</button>
+        )}
         <div className="sidebar-foot">
           <div>
             <strong>{user.name}</strong>
@@ -62,7 +80,8 @@ export default function Layout() {
       <div className="main">
         <header className="topbar-mobile">
           <button className="btn-icon" onClick={() => setOpen(!open)} aria-label="Menú">☰</button>
-          <strong>SecureFleet CRM</strong>
+          <img className="brand-logo small" src={logoUrl(brand)} alt="" />
+          <strong>{brand.name} CRM</strong>
         </header>
         <Outlet />
       </div>
