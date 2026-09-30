@@ -174,3 +174,11 @@ test('teléfono duplicado devuelve 409', async () => {
   const r = await api('/contacts', { method: 'POST', body: { name: 'Otro', phone: '5512349999' } });
   assert.equal(r.status, 409);
 });
+
+test('páginas legales públicas', async () => {
+  for (const path of ['/privacidad', '/terminos', '/eliminacion-de-datos']) {
+    const res = await fetch(base.replace('/api', '') + path);
+    assert.equal(res.status, 200);
+    assert.match(await res.text(), /SecureFleet/);
+  }
+});

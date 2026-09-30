@@ -14,6 +14,7 @@ import quoteRoutes from './routes/quotes.js';
 import activityRoutes from './routes/activities.js';
 import dashboardRoutes from './routes/dashboard.js';
 import settingsRoutes from './routes/settings.js';
+import legalRoutes from './routes/legal.js';
 import { whatsappRoutes, whatsappWebhookRoutes } from './routes/whatsapp.js';
 
 export function createApp(db, { wa = createDynamicWhatsAppClient(db), signup = createSignupClient() } = {}) {
@@ -43,6 +44,9 @@ export function createApp(db, { wa = createDynamicWhatsAppClient(db), signup = c
   app.use('/api', api);
 
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Ruta no encontrada')));
+
+  // Páginas públicas legales (Meta las pide para la app de WhatsApp)
+  app.use(legalRoutes(db));
 
   // Frontend compilado (client/dist) en producción
   const dist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../client/dist');
