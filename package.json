@@ -4,6 +4,7 @@
   "private": true,
   "description": "CRM de SecureFleet con integración a WhatsApp Business Cloud API",
   "scripts": {
+    "setup": "npm run install:all && npm run seed && npm run build",
     "install:all": "npm --prefix server install && npm --prefix client install",
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",

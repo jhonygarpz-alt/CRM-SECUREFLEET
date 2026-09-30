@@ -26,6 +26,18 @@ server/   API REST, webhooks de WhatsApp, PDF, base de datos
 client/   Aplicación web (React)
 ```
 
+## Instalación en tu computadora (Windows / Mac)
+
+Requisitos: [Node.js 22 LTS](https://nodejs.org) y [Git](https://git-scm.com).
+
+```bash
+git clone https://github.com/jhonygarpz-alt/CRM-SECUREFLEET.git
+cd CRM-SECUREFLEET
+git checkout claude/securefleet-crm-whatsapp-lipfmm
+npm run setup     # instala dependencias, carga datos de ejemplo y compila la web (solo la primera vez)
+npm start         # abre http://localhost:4000
+```
+
 ## Arranque rápido (desarrollo)
 
 ```bash
