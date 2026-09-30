@@ -6,6 +6,15 @@ set -euo pipefail
 NAME="securefleet-crm"
 ZONE="us-central1-a"
 
+# Si Cloud Shell no tiene proyecto activo, busca el proyecto donde está el servidor del CRM.
+if [ -z "$(gcloud config get-value project 2>/dev/null)" ]; then
+  for P in $(gcloud projects list --format="value(projectId)"); do
+    if gcloud compute instances describe "$NAME" --zone "$ZONE" --project "$P" >/dev/null 2>&1; then
+      gcloud config set project "$P" >/dev/null && echo "Proyecto: $P" && break
+    fi
+  done
+fi
+
 get_meta() {
   gcloud compute instances describe "$NAME" --zone "$ZONE" --format=json | python3 -c "
 import sys, json
