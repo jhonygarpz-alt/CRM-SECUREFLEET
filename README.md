@@ -54,6 +54,22 @@ Usuario inicial: `admin@securefleet.mx` / `admin123`. **Cámbialo** desde Config
 
 Sin credenciales de WhatsApp, el CRM trabaja en **modo simulación**: los mensajes se guardan pero no se envían. En la bandeja de WhatsApp, el botón 🧪 simula un mensaje entrante para probar el flujo completo.
 
+## Publicar en Google Cloud (recomendado, nivel gratuito)
+
+Instala el CRM en una VM **e2-micro** de Compute Engine, que entra en el nivel gratuito de Google Cloud. Incluye HTTPS automático (Caddy + Let's Encrypt), IP fija y respaldo diario del disco (7 días).
+
+1. Abre **Google Cloud Shell**: https://shell.cloud.google.com (usa tu cuenta de Google).
+2. Pega y ejecuta:
+   ```bash
+   bash <(curl -fsSL https://raw.githubusercontent.com/jhonygarpz-alt/CRM-SECUREFLEET/claude/securefleet-crm-whatsapp-lipfmm/deploy/gcp/instalar.sh)
+   ```
+3. Responde el correo y la contraseña del administrador, y un dominio propio si lo tienes. Si solo presionas Enter, se usa uno gratuito del tipo `34-12-34-56.sslip.io`.
+4. Espera de 5 a 10 minutos. El script imprime la URL del CRM y la del webhook de WhatsApp.
+
+Para **actualizar** a la última versión, vuelve a ejecutar el mismo comando: detecta la instalación y reinicia el servidor con el código nuevo sin tocar tus datos.
+
+Requisito: el proyecto de Google Cloud necesita una cuenta de facturación activa, porque Google la exige incluso para el nivel gratuito.
+
 ## Publicar en la nube (Railway)
 
 El proyecto ya incluye `Dockerfile` y `railway.json`. Railway cuesta alrededor de 5 USD al mes y te da una URL con HTTPS, que Meta exige para los webhooks.
