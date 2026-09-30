@@ -1,5 +1,5 @@
 #!/bin/bash
-# Configura las credenciales de WhatsApp Business Cloud API en el servidor del CRM.
+# Configura la app de Meta (WhatsApp) en el servidor del CRM.
 # Ejecútalo en Google Cloud Shell:
 #   bash <(curl -fsSL https://raw.githubusercontent.com/jhonygarpz-alt/CRM-SECUREFLEET/claude/securefleet-crm-whatsapp-lipfmm/deploy/gcp/whatsapp.sh)
 set -euo pipefail
@@ -17,30 +17,30 @@ ENV_NOW=$(get_meta crm-env)
 DOMAIN=$(get_meta crm-domain)
 VERIFY=$(echo "$ENV_NOW" | sed -n 's/^WHATSAPP_VERIFY_TOKEN=//p')
 
-echo "Pega los datos de Meta (WhatsApp → Configuración de la API). No se muestran en pantalla los secretos."
-read -rp  "Phone Number ID (Identificador del número de teléfono): " PHONE_ID
-read -rp  "WhatsApp Business Account ID (Identificador de la cuenta): " WABA_ID
-read -rsp "Token de acceso permanente: " TOKEN; echo
-read -rsp "App Secret (Configuración de la app → Básica → Clave secreta): " APP_SECRET; echo
-[ -n "$PHONE_ID" ] && [ -n "$TOKEN" ] || { echo "Phone Number ID y token son obligatorios."; exit 1; }
+echo "Datos de tu app en developers.facebook.com (los secretos no se muestran al escribir):"
+read -rp  "Identificador de la app (App ID): " APP_ID
+read -rsp "Clave secreta de la app (Configuración de la app → Básica): " APP_SECRET; echo
+read -rp  "ID de configuración del registro integrado (Facebook Login for Business → Configuraciones): " CONFIG_ID
+[ -n "$APP_ID" ] && [ -n "$APP_SECRET" ] && [ -n "$CONFIG_ID" ] || { echo "Los tres datos son obligatorios."; exit 1; }
 
-NEW_ENV=$(echo "$ENV_NOW" | grep -v -E '^WHATSAPP_(TOKEN|PHONE_NUMBER_ID|BUSINESS_ACCOUNT_ID|APP_SECRET)=')
-NEW_ENV+=$'\n'"WHATSAPP_TOKEN=$TOKEN"
-NEW_ENV+=$'\n'"WHATSAPP_PHONE_NUMBER_ID=$PHONE_ID"
-NEW_ENV+=$'\n'"WHATSAPP_BUSINESS_ACCOUNT_ID=$WABA_ID"
+NEW_ENV=$(echo "$ENV_NOW" | grep -v -E '^WHATSAPP_(APP_ID|APP_SECRET|CONFIG_ID)=')
+NEW_ENV+=$'\n'"WHATSAPP_APP_ID=$APP_ID"
 NEW_ENV+=$'\n'"WHATSAPP_APP_SECRET=$APP_SECRET"
+NEW_ENV+=$'\n'"WHATSAPP_CONFIG_ID=$CONFIG_ID"
 
 TMP=$(mktemp); chmod 600 "$TMP"; printf '%s\n' "$NEW_ENV" > "$TMP"
 gcloud compute instances add-metadata "$NAME" --zone "$ZONE" --metadata-from-file crm-env="$TMP"
 rm -f "$TMP"
 
-echo "Aplicando en el servidor (1-3 minutos)…"
+echo "Aplicando en el servidor (puede tardar unos minutos)…"
 gcloud compute ssh "$NAME" --zone "$ZONE" --command 'sudo google_metadata_script_runner startup >/dev/null 2>&1; sudo docker ps --format "{{.Names}}: {{.Status}}"'
 
 cat <<MSG
 
-✅ Credenciales guardadas. Ahora en Meta → WhatsApp → Configuración → Webhook:
+✅ App de Meta configurada. Ahora en developers.facebook.com → tu app → WhatsApp → Configuración → Webhook:
    URL de devolución de llamada:  https://$DOMAIN/api/whatsapp/webhook
    Token de verificación:          $VERIFY
-   Luego en "Campos del webhook" suscríbete a:  messages
+   Campos a suscribir: messages, smb_message_echoes, history, smb_app_state_sync
+
+Después entra al CRM → Configuración → "Conectar WhatsApp Business".
 MSG

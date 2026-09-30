@@ -101,6 +101,78 @@ export function createWhatsAppClient({
   };
 }
 
+/**
+ * Cliente cuya configuración se resuelve en cada uso: primero lo guardado en la base de datos
+ * (conexión hecha con el botón "Conectar WhatsApp"), después las variables de entorno.
+ */
+export function createDynamicWhatsAppClient(db, { fetchImpl = globalThis.fetch } = {}) {
+  const current = () => {
+    const rows = db.prepare(`SELECT key, value FROM settings WHERE key IN
+      ('secret_wa_token','wa_phone_number_id','wa_waba_id')`).all();
+    const cfg = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+    return createWhatsAppClient({
+      token: cfg.secret_wa_token || process.env.WHATSAPP_TOKEN,
+      phoneNumberId: cfg.wa_phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID,
+      businessAccountId: cfg.wa_waba_id || process.env.WHATSAPP_BUSINESS_ACCOUNT_ID,
+      fetchImpl,
+    });
+  };
+  return {
+    get configured() { return current().configured; },
+    get info() { return current().info; },
+    sendText: (...a) => current().sendText(...a),
+    sendTemplate: (...a) => current().sendTemplate(...a),
+    sendDocument: (...a) => current().sendDocument(...a),
+    markAsRead: (...a) => current().markAsRead(...a),
+    listTemplates: (...a) => current().listTemplates(...a),
+    verifySignature: (...a) => current().verifySignature(...a),
+  };
+}
+
+/**
+ * Pasos del registro integrado (Embedded Signup) de Meta, incluido el modo coexistencia
+ * (el número sigue funcionando en la app WhatsApp Business del celular).
+ */
+export function createSignupClient({
+  appId = process.env.WHATSAPP_APP_ID,
+  appSecret = process.env.WHATSAPP_APP_SECRET,
+  apiVersion = process.env.WHATSAPP_API_VERSION || 'v21.0',
+  fetchImpl = globalThis.fetch,
+} = {}) {
+  const base = `https://graph.facebook.com/${apiVersion}`;
+  async function call(url, { method = 'GET', token, json } = {}) {
+    const res = await fetchImpl(url, {
+      method,
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(json ? { 'Content-Type': 'application/json' } : {}) },
+      body: json ? JSON.stringify(json) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(`Meta: ${data?.error?.error_user_msg || data?.error?.message || `HTTP ${res.status}`}`);
+      err.status = 502;
+      throw err;
+    }
+    return data;
+  }
+  return {
+    enabled: Boolean(appId && appSecret && process.env.WHATSAPP_CONFIG_ID),
+    /** Cambia el código de un solo uso por un token de negocio de larga duración. */
+    async exchangeCode(code) {
+      const q = new URLSearchParams({ client_id: appId, client_secret: appSecret, code });
+      const data = await call(`${base}/oauth/access_token?${q}`);
+      if (!data.access_token) throw Object.assign(new Error('Meta no devolvió un token'), { status: 502 });
+      return data.access_token;
+    },
+    phoneNumbers: (wabaId, token) =>
+      call(`${base}/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name`, { token }).then((d) => d.data || []),
+    phoneInfo: (phoneId, token) => call(`${base}/${phoneId}?fields=display_phone_number,verified_name`, { token }),
+    subscribeApp: (wabaId, token) => call(`${base}/${wabaId}/subscribed_apps`, { method: 'POST', token }),
+    /** Coexistencia: pide a Meta sincronizar contactos e historial de la app (disponible 24 h tras conectar). */
+    requestSync: (phoneId, token, syncType) =>
+      call(`${base}/${phoneId}/smb_app_data`, { method: 'POST', token, json: { messaging_product: 'whatsapp', sync_type: syncType } }),
+  };
+}
+
 /** Extrae un texto legible de un mensaje entrante de WhatsApp. */
 export function describeIncoming(msg) {
   switch (msg.type) {

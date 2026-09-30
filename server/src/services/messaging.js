@@ -22,6 +22,38 @@ export function recordOutgoing(db, { contactId, waId, type, body, mediaId, filen
   return db.prepare('SELECT * FROM wa_messages WHERE id = ?').get(info.lastInsertRowid);
 }
 
+const toSql = (ts) => (ts ? new Date(Number(ts) * 1000) : new Date()).toISOString().replace('T', ' ').slice(0, 19);
+
+/**
+ * Guarda un mensaje (eco o historial) si no existe. Crea el contacto si hace falta.
+ * Devuelve true si se insertó.
+ */
+function saveMessage(db, { phone, msg, direction, status, autoCreate, markUnread = true }) {
+  if (!phone || !msg?.id) return false;
+  if (db.prepare('SELECT 1 FROM wa_messages WHERE wa_message_id = ?').get(msg.id)) return false;
+  let contact = db.prepare('SELECT * FROM contacts WHERE phone = ?').get(phone);
+  if (!contact) {
+    if (!autoCreate) return false;
+    const info = db.prepare(`INSERT INTO contacts (type, name, phone, source, status) VALUES ('lead', ?, ?, 'WhatsApp', 'nuevo')`)
+      .run(`WhatsApp +${phone}`, phone);
+    contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(info.lastInsertRowid);
+  }
+  const tsSql = toSql(msg.timestamp);
+  const media = msg[msg.type] || {};
+  db.prepare(`INSERT INTO wa_messages (contact_id, wa_message_id, direction, type, body, media_id, filename, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(contact.id, msg.id, direction, msg.type || 'text', describeIncoming(msg), media.id || null, media.filename || null,
+      status || (direction === 'in' ? 'received' : 'sent'), tsSql);
+  if (direction === 'in') {
+    db.prepare(`UPDATE contacts SET last_inbound_at = MAX(COALESCE(last_inbound_at, ''), ?),
+        last_contact_at = MAX(COALESCE(last_contact_at, ''), ?), unread_count = unread_count + ? WHERE id = ?`)
+      .run(tsSql, tsSql, markUnread ? 1 : 0, contact.id);
+  } else {
+    db.prepare(`UPDATE contacts SET last_contact_at = MAX(COALESCE(last_contact_at, ''), ?) WHERE id = ?`).run(tsSql, contact.id);
+  }
+  return true;
+}
+
 /**
  * Procesa el payload de webhook de Meta: mensajes entrantes y actualizaciones de estado.
  * Crea leads automáticamente cuando escribe un número desconocido.
@@ -78,6 +110,37 @@ export async function processWebhook(db, wa, payload) {
           } catch (e) {
             console.error('No se pudo enviar mensaje de bienvenida:', e.message);
           }
+        }
+      }
+
+      // Coexistencia: mensajes que el equipo envió desde la app WhatsApp Business del celular.
+      for (const msg of value.message_echoes || []) {
+        if (saveMessage(db, { phone: normalizePhone(msg.to), msg, direction: 'out', autoCreate: settings.wa_auto_create_leads === '1' })) {
+          result.echoes = (result.echoes || 0) + 1;
+        }
+      }
+
+      // Coexistencia: historial de conversaciones de la app (llega una vez, al conectar).
+      for (const chunk of value.history || []) {
+        for (const thread of chunk.threads || []) {
+          const customer = normalizePhone(thread.id);
+          for (const msg of thread.messages || []) {
+            const direction = normalizePhone(msg.from) === customer ? 'in' : 'out';
+            const status = String(msg.history_context?.status || (direction === 'in' ? 'received' : 'sent')).toLowerCase();
+            if (saveMessage(db, { phone: customer, msg, direction, status, autoCreate: true, markUnread: false })) {
+              result.history = (result.history || 0) + 1;
+            }
+          }
+        }
+      }
+
+      // Coexistencia: nombres de la libreta de contactos de la app.
+      for (const item of value.state_sync || []) {
+        const c = item.contact;
+        if (item.type !== 'contact' || item.action === 'remove' || !c?.phone_number) continue;
+        const name = c.full_name || c.first_name;
+        if (name) {
+          db.prepare(`UPDATE contacts SET name = ? WHERE phone = ? AND name LIKE 'WhatsApp +%'`).run(name, normalizePhone(c.phone_number));
         }
       }
 

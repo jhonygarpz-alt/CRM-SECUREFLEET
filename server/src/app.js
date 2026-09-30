@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { requireAuth } from './auth.js';
 import { HttpError } from './utils.js';
-import { createWhatsAppClient } from './services/whatsapp.js';
+import { createDynamicWhatsAppClient, createSignupClient } from './services/whatsapp.js';
 import authRoutes from './routes/auth.js';
 import contactRoutes from './routes/contacts.js';
 import dealRoutes from './routes/deals.js';
@@ -16,7 +16,7 @@ import dashboardRoutes from './routes/dashboard.js';
 import settingsRoutes from './routes/settings.js';
 import { whatsappRoutes, whatsappWebhookRoutes } from './routes/whatsapp.js';
 
-export function createApp(db, { wa = createWhatsAppClient() } = {}) {
+export function createApp(db, { wa = createDynamicWhatsAppClient(db), signup = createSignupClient() } = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',') || true }));
@@ -39,7 +39,7 @@ export function createApp(db, { wa = createWhatsAppClient() } = {}) {
   api.use(activityRoutes(db));
   api.use(dashboardRoutes(db));
   api.use(settingsRoutes(db));
-  api.use(whatsappRoutes(db, wa));
+  api.use(whatsappRoutes(db, wa, signup));
   app.use('/api', api);
 
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Ruta no encontrada')));

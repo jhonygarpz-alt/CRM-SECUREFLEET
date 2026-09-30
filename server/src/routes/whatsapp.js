@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { HttpError, asyncHandler } from '../utils.js';
+import { requireAdmin } from '../auth.js';
 import { getSettings } from '../db.js';
 import { processWebhook, recordOutgoing, windowOpen } from '../services/messaging.js';
 
@@ -30,7 +31,7 @@ export function whatsappWebhookRoutes(db, wa) {
 }
 
 /** Endpoints autenticados para el equipo de ventas. */
-export function whatsappRoutes(db, wa) {
+export function whatsappRoutes(db, wa, signup = { enabled: false }) {
   const r = Router();
 
   const contactOr404 = (id) => {
@@ -47,8 +48,60 @@ export function whatsappRoutes(db, wa) {
       ...wa.info,
       webhookVerifyTokenSet: Boolean(process.env.WHATSAPP_VERIFY_TOKEN),
       signatureValidation: Boolean(process.env.WHATSAPP_APP_SECRET),
+      displayPhone: getSettings(db).wa_display_phone || null,
+      verifiedName: getSettings(db).wa_verified_name || null,
+      connectedVia: getSettings(db).secret_wa_token ? 'embedded_signup' : wa.configured ? 'env' : null,
+      coexistence: getSettings(db).wa_coexistence === '1',
+      // Datos públicos para abrir el registro integrado de Meta desde el navegador.
+      signup: signup.enabled
+        ? { appId: process.env.WHATSAPP_APP_ID, configId: process.env.WHATSAPP_CONFIG_ID, apiVersion: process.env.WHATSAPP_API_VERSION || 'v21.0' }
+        : null,
     });
   }));
+
+  const saveSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+
+  /**
+   * Finaliza el registro integrado de Meta: recibe el código del popup de Facebook,
+   * obtiene el token, suscribe la app a los webhooks y guarda el número conectado.
+   */
+  r.post('/whatsapp/embedded-signup', requireAdmin, asyncHandler(async (req, res) => {
+    if (!signup.enabled) throw new HttpError(400, 'Falta configurar WHATSAPP_APP_ID, WHATSAPP_APP_SECRET y WHATSAPP_CONFIG_ID en el servidor');
+    const { code, waba_id: wabaId, coexistence = true } = req.body || {};
+    let phoneId = req.body?.phone_number_id;
+    if (!code || !wabaId) throw new HttpError(400, 'Meta no devolvió el código o la cuenta de WhatsApp; vuelve a intentarlo');
+    const token = await signup.exchangeCode(code);
+    if (!phoneId) {
+      const numbers = await signup.phoneNumbers(wabaId, token);
+      if (!numbers.length) throw new HttpError(400, 'La cuenta de WhatsApp no tiene números');
+      phoneId = numbers[0].id;
+    }
+    const info = await signup.phoneInfo(phoneId, token).catch(() => ({}));
+    await signup.subscribeApp(wabaId, token);
+    db.transaction(() => {
+      saveSetting.run('secret_wa_token', token);
+      saveSetting.run('wa_phone_number_id', String(phoneId));
+      saveSetting.run('wa_waba_id', String(wabaId));
+      saveSetting.run('wa_display_phone', info.display_phone_number || '');
+      saveSetting.run('wa_verified_name', info.verified_name || '');
+      saveSetting.run('wa_coexistence', coexistence ? '1' : '0');
+      saveSetting.run('wa_connected_at', new Date().toISOString());
+    })();
+    const sync = {};
+    if (coexistence) {
+      // Trae contactos e historial (últimos 6 meses) de la app del celular. Solo se permite en las primeras 24 h.
+      for (const type of ['smb_app_state_sync', 'history']) {
+        try { await signup.requestSync(phoneId, token, type); sync[type] = 'solicitado'; } catch (e) { sync[type] = e.message; }
+      }
+    }
+    res.json({ ok: true, phoneNumberId: phoneId, wabaId, displayPhone: info.display_phone_number || null, sync });
+  }));
+
+  r.post('/whatsapp/disconnect', requireAdmin, (_req, res) => {
+    db.prepare(`DELETE FROM settings WHERE key IN ('secret_wa_token','wa_phone_number_id','wa_waba_id','wa_display_phone',
+      'wa_verified_name','wa_coexistence','wa_connected_at')`).run();
+    res.json({ ok: true });
+  });
 
   /** Bandeja: una fila por contacto con su último mensaje. */
   r.get('/whatsapp/conversations', (req, res) => {

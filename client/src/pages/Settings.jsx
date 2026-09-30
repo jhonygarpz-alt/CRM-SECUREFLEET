@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useAuth } from '../App.jsx';
 import { toast } from '../components/Toast.jsx';
+import ConnectWhatsApp from '../components/ConnectWhatsApp.jsx';
 
 export default function Settings() {
   const { user } = useAuth();
@@ -28,21 +29,18 @@ export default function Settings() {
 
       <section className="card">
         <h3>Conexión con WhatsApp Business</h3>
-        {wa && (
-          <div className={`banner ${wa.configured ? 'ok' : 'warn'}`}>
-            {wa.configured
-              ? <>✅ Conectado a la API de WhatsApp Cloud · Phone Number ID <code>{wa.phoneNumberId}</code> · {wa.apiVersion}</>
-              : <>⚠️ Modo simulación: faltan <code>WHATSAPP_TOKEN</code> y <code>WHATSAPP_PHONE_NUMBER_ID</code> en el servidor.</>}
-            {wa.configured && !wa.signatureValidation && <div>⚠️ Configura <code>WHATSAPP_APP_SECRET</code> para validar la firma de los webhooks.</div>}
-          </div>
-        )}
+        <ConnectWhatsApp status={wa} isAdmin={isAdmin} onChange={() => api('/whatsapp/status').then(setWa)} />
+        {wa?.configured && !wa.signatureValidation && <div className="banner warn">⚠️ Configura <code>WHATSAPP_APP_SECRET</code> para validar la firma de los webhooks.</div>}
+        <details>
+          <summary className="muted small">Configuración técnica en Meta</summary>
         <ol className="steps">
           <li>En <a href="https://developers.facebook.com/apps" target="_blank" rel="noreferrer">Meta for Developers</a> crea una app tipo <em>Business</em> y agrega el producto <strong>WhatsApp</strong>.</li>
           <li>Registra el número de SecureFleet en WhatsApp Manager y copia el <strong>Phone Number ID</strong> y el <strong>WhatsApp Business Account ID</strong>.</li>
           <li>Crea un <strong>usuario del sistema</strong> en el Business Manager y genera un token permanente con permisos <code>whatsapp_business_messaging</code> y <code>whatsapp_business_management</code>.</li>
-          <li>En WhatsApp → Configuración → Webhook, usa la URL <code className="copy" onClick={() => { navigator.clipboard?.writeText(webhookUrl); toast('URL copiada'); }}>{webhookUrl}</code> y el token de verificación que pusiste en <code>WHATSAPP_VERIFY_TOKEN</code>. Suscríbete al campo <strong>messages</strong>.</li>
+          <li>En WhatsApp → Configuración → Webhook, usa la URL <code className="copy" onClick={() => { navigator.clipboard?.writeText(webhookUrl); toast('URL copiada'); }}>{webhookUrl}</code> y el token de verificación que pusiste en <code>WHATSAPP_VERIFY_TOKEN</code>. Suscríbete a los campos <strong>messages</strong>, <strong>smb_message_echoes</strong>, <strong>history</strong> y <strong>smb_app_state_sync</strong> (los últimos tres son para coexistencia con la app del celular).</li>
           <li>Crea y aprueba plantillas (ej. <em>seguimiento_cotizacion</em>) para escribir a clientes fuera de la ventana de 24 h.</li>
         </ol>
+        </details>
       </section>
 
       <form onSubmit={save}>
