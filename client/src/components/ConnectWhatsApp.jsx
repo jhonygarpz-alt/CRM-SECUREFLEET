@@ -91,8 +91,24 @@ export default function ConnectWhatsApp({ status, onChange, isAdmin }) {
   }
 
   if (status.connectedVia === 'embedded_signup') {
+    const daysLeft = status.connectedAt
+      ? Math.ceil(status.tokenDays - (Date.now() - new Date(status.connectedAt).getTime()) / 86400000)
+      : null;
+    const expiring = daysLeft !== null && daysLeft <= 10;
     return (
-      <div className="banner ok">
+      <div className={`banner ${expiring ? 'warn' : 'ok'}`}>
+        {daysLeft !== null && (
+          <div style={{ marginBottom: 6 }}>
+            {daysLeft > 0
+              ? `La autorización de Meta vence en ${daysLeft} día(s).`
+              : 'La autorización de Meta venció: los mensajes no se enviarán hasta reconectar.'}
+            {isAdmin && expiring && status.signup && (
+              <button className="btn small wa" style={{ marginLeft: 12 }} onClick={connect} disabled={busy}>
+                {busy ? 'Conectando…' : 'Reconectar WhatsApp'}
+              </button>
+            )}
+          </div>
+        )}
         ✅ Conectado: <strong>{status.displayPhone}</strong> {status.verifiedName && `· ${status.verifiedName}`}
         {status.coexistence && ' · modo coexistencia (también funciona en tu celular)'}
         {isAdmin && <button className="btn small danger-outline" style={{ marginLeft: 12 }} onClick={disconnect}>Desconectar</button>}

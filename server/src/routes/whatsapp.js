@@ -52,6 +52,8 @@ export function whatsappRoutes(db, wa, signup = { enabled: false }) {
       verifiedName: getSettings(db).wa_verified_name || null,
       connectedVia: getSettings(db).secret_wa_token ? 'embedded_signup' : wa.configured ? 'env' : null,
       coexistence: getSettings(db).wa_coexistence === '1',
+      connectedAt: getSettings(db).wa_connected_at || null,
+      tokenDays: Number(process.env.WHATSAPP_TOKEN_DAYS) || 60,
       // Datos públicos para abrir el registro integrado de Meta desde el navegador.
       signup: signup.enabled
         ? { appId: process.env.WHATSAPP_APP_ID, configId: process.env.WHATSAPP_CONFIG_ID, apiVersion: process.env.WHATSAPP_API_VERSION || 'v21.0' }
