@@ -56,7 +56,7 @@ export function whatsappRoutes(db, wa, signup = { enabled: false }) {
       tokenDays: Number(process.env.WHATSAPP_TOKEN_DAYS) || 60,
       // Datos públicos para abrir el registro integrado de Meta desde el navegador.
       signup: signup.enabled
-        ? { appId: process.env.WHATSAPP_APP_ID, configId: process.env.WHATSAPP_CONFIG_ID, apiVersion: process.env.WHATSAPP_API_VERSION || 'v21.0' }
+        ? { appId: process.env.WHATSAPP_APP_ID, configId: process.env.WHATSAPP_CONFIG_ID, apiVersion: process.env.WHATSAPP_API_VERSION || 'v26.0' }
         : null,
     });
   }));

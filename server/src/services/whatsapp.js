@@ -11,7 +11,7 @@ export function createWhatsAppClient({
   phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID,
   businessAccountId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID,
   appSecret = process.env.WHATSAPP_APP_SECRET,
-  apiVersion = process.env.WHATSAPP_API_VERSION || 'v21.0',
+  apiVersion = process.env.WHATSAPP_API_VERSION || 'v26.0',
   fetchImpl = globalThis.fetch,
 } = {}) {
   const configured = Boolean(token && phoneNumberId);
@@ -136,7 +136,7 @@ export function createDynamicWhatsAppClient(db, { fetchImpl = globalThis.fetch }
 export function createSignupClient({
   appId = process.env.WHATSAPP_APP_ID,
   appSecret = process.env.WHATSAPP_APP_SECRET,
-  apiVersion = process.env.WHATSAPP_API_VERSION || 'v21.0',
+  apiVersion = process.env.WHATSAPP_API_VERSION || 'v26.0',
   fetchImpl = globalThis.fetch,
 } = {}) {
   const base = `https://graph.facebook.com/${apiVersion}`;
