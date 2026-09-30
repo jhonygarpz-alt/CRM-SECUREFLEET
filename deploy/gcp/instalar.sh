@@ -16,16 +16,37 @@ die() { printf '\n\033[1;31m✖ %s\033[0m\n' "$*"; exit 1; }
 
 PROJECT=$(gcloud config get-value project 2>/dev/null || true)
 if [ -z "$PROJECT" ]; then
-  echo "Tus proyectos de Google Cloud:"
-  gcloud projects list --format="table(projectId,name)"
-  read -rp "Escribe el PROJECT_ID donde instalar el CRM: " PROJECT
+  PROJECTS=$(gcloud projects list --format="value(projectId)" 2>/dev/null || true)
+  if [ -n "$PROJECTS" ]; then
+    echo "Tus proyectos de Google Cloud:"
+    gcloud projects list --format="table(projectId,name)"
+    read -rp "Escribe el PROJECT_ID donde instalar el CRM (o Enter para crear uno nuevo): " PROJECT
+  fi
+  if [ -z "$PROJECT" ]; then
+    PROJECT="securefleet-crm-$(openssl rand -hex 3)"
+    say "Creando el proyecto $PROJECT…"
+    gcloud projects create "$PROJECT" --name "SecureFleet CRM"
+  fi
   gcloud config set project "$PROJECT" >/dev/null
 fi
 say "Proyecto: $PROJECT"
 
-BILLING=$(gcloud beta billing projects describe "$PROJECT" --format='value(billingEnabled)' 2>/dev/null || echo "?")
-if [ "$(echo "$BILLING" | tr '[:upper:]' '[:lower:]')" = "false" ]; then
-  die "El proyecto no tiene cuenta de facturación. Actívala en https://console.cloud.google.com/billing (la e2-micro es gratuita, pero Google exige tarjeta registrada) y vuelve a ejecutar."
+BILLING=$(gcloud billing projects describe "$PROJECT" --format='value(billingEnabled)' 2>/dev/null || echo "?")
+if [ "$(echo "$BILLING" | tr '[:upper:]' '[:lower:]')" != "true" ]; then
+  ACCOUNTS=$(gcloud billing accounts list --filter=open=true --format="value(name)" 2>/dev/null || true)
+  if [ -z "$ACCOUNTS" ]; then
+    die "Tu cuenta de Google no tiene una cuenta de facturación. Créala (con tarjeta; la e2-micro es gratuita) en:
+   https://console.cloud.google.com/billing/create
+Luego vuelve a ejecutar este mismo comando."
+  fi
+  ACCOUNT=$(echo "$ACCOUNTS" | head -n1)
+  if [ "$(echo "$ACCOUNTS" | wc -l)" -gt 1 ]; then
+    gcloud billing accounts list --filter=open=true
+    read -rp "ID de la cuenta de facturación a usar [$ACCOUNT]: " CHOSEN
+    ACCOUNT=${CHOSEN:-$ACCOUNT}
+  fi
+  say "Vinculando la facturación $ACCOUNT al proyecto…"
+  gcloud billing projects link "$PROJECT" --billing-account "${ACCOUNT#billingAccounts/}"
 fi
 
 say "Activando Compute Engine (puede tardar 1 minuto)…"
