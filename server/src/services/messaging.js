@@ -61,6 +61,10 @@ function saveMessage(db, { phone, msg, direction, status, autoCreate, markUnread
 export async function processWebhook(db, wa, payload) {
   const settings = getSettings(db);
   const result = { messages: 0, statuses: 0, newContacts: [] };
+  // 360dialog envía algunos eventos (p. ej. historial) como { event, data } en lugar de entry/changes.
+  if (payload && !payload.entry && payload.data && payload.event) {
+    payload = { entry: [{ changes: [{ field: payload.event, value: payload.data }] }] };
+  }
 
   for (const entry of payload?.entry || []) {
     for (const change of entry.changes || []) {

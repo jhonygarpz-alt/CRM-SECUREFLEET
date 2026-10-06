@@ -1,12 +1,21 @@
 import crypto from 'node:crypto';
 
+const D360_BASE = 'https://waba-v2.360dialog.io';
+
 /**
- * Cliente para la API oficial de WhatsApp Business Cloud (Meta Graph API).
+ * Cliente para la API de WhatsApp Business Cloud.
+ *
+ * Proveedores:
+ *  - `meta`: API de Meta directa (graph.facebook.com) con token y Phone Number ID.
+ *  - `360dialog`: proveedor oficial de Meta (BSP). Misma estructura de mensajes que la API de Meta,
+ *    pero en waba-v2.360dialog.io con el encabezado D360-API-KEY; la clave ya identifica el número.
+ *    Permite conectar un número que sigue usándose en la app WhatsApp Business (coexistencia).
  *
  * Si no hay credenciales configuradas trabaja en "modo simulación": los mensajes se
  * guardan en el CRM con estado `simulated` pero no se envían, para poder probar el flujo.
  */
 export function createWhatsAppClient({
+  d360Key = process.env.D360_API_KEY,
   token = process.env.WHATSAPP_TOKEN,
   phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID,
   businessAccountId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID,
@@ -14,21 +23,26 @@ export function createWhatsAppClient({
   apiVersion = process.env.WHATSAPP_API_VERSION || 'v26.0',
   fetchImpl = globalThis.fetch,
 } = {}) {
-  const configured = Boolean(token && phoneNumberId);
-  const base = `https://graph.facebook.com/${apiVersion}`;
+  const provider = d360Key ? '360dialog' : 'meta';
+  const is360 = provider === '360dialog';
+  const configured = is360 ? Boolean(d360Key) : Boolean(token && phoneNumberId);
+  const base = is360 ? D360_BASE : `https://graph.facebook.com/${apiVersion}`;
+  // Rutas: en 360dialog la clave ya identifica el número, no se usa el Phone Number ID.
+  const path = (p) => (is360 ? p : `${phoneNumberId}/${p}`);
 
   async function graph(pathname, { method = 'POST', json, form } = {}) {
     const res = await fetchImpl(`${base}/${pathname}`, {
       method,
       headers: {
-        Authorization: `Bearer ${token}`,
+        ...(is360 ? { 'D360-API-KEY': d360Key } : { Authorization: `Bearer ${token}` }),
         ...(json ? { 'Content-Type': 'application/json' } : {}),
       },
       body: json ? JSON.stringify(json) : form,
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const msg = data?.error?.error_data?.details || data?.error?.message || `HTTP ${res.status}`;
+      const e = data?.error || data?.errors?.[0] || data?.meta || {};
+      const msg = e.error_data?.details || e.details || e.message || e.title || data?.message || `HTTP ${res.status}`;
       const err = new Error(`WhatsApp API: ${msg}`);
       err.status = 502;
       err.code = data?.error?.code;
@@ -39,7 +53,7 @@ export function createWhatsAppClient({
 
   async function sendMessage(to, payload) {
     if (!configured) return { id: `sim-${crypto.randomUUID()}`, simulated: true };
-    const data = await graph(`${phoneNumberId}/messages`, {
+    const data = await graph(path('messages'), {
       json: { messaging_product: 'whatsapp', recipient_type: 'individual', to, ...payload },
     });
     return { id: data.messages?.[0]?.id, simulated: false };
@@ -47,7 +61,8 @@ export function createWhatsAppClient({
 
   return {
     configured,
-    info: { phoneNumberId: phoneNumberId || null, businessAccountId: businessAccountId || null, apiVersion },
+    provider,
+    info: { provider, phoneNumberId: is360 ? null : phoneNumberId || null, businessAccountId: businessAccountId || null, apiVersion },
 
     sendText(to, body) {
       return sendMessage(to, { type: 'text', text: { preview_url: true, body } });
@@ -68,20 +83,24 @@ export function createWhatsAppClient({
       form.append('messaging_product', 'whatsapp');
       form.append('type', mime);
       form.append('file', new Blob([buffer], { type: mime }), filename);
-      const media = await graph(`${phoneNumberId}/media`, { form });
+      const media = await graph(path('media'), { form });
       const sent = await sendMessage(to, { type: 'document', document: { id: media.id, filename, caption } });
       return { ...sent, mediaId: media.id };
     },
 
     markAsRead(messageId) {
       if (!configured) return Promise.resolve();
-      return graph(`${phoneNumberId}/messages`, {
+      return graph(path('messages'), {
         json: { messaging_product: 'whatsapp', status: 'read', message_id: messageId },
       }).catch(() => {});
     },
 
     /** Lista las plantillas aprobadas de la cuenta de WhatsApp Business. */
     async listTemplates() {
+      if (is360) {
+        const data = await graph('v1/configs/templates?limit=200', { method: 'GET' });
+        return (data.waba_templates || data.data || []).map((t) => ({ ...t, status: String(t.status || '').toUpperCase() }));
+      }
       if (!configured || !businessAccountId) return [];
       const data = await graph(`${businessAccountId}/message_templates?limit=100&fields=name,language,status,category,components`, {
         method: 'GET',
@@ -119,6 +138,7 @@ export function createDynamicWhatsAppClient(db, { fetchImpl = globalThis.fetch }
   };
   return {
     get configured() { return current().configured; },
+    get provider() { return current().provider; },
     get info() { return current().info; },
     sendText: (...a) => current().sendText(...a),
     sendTemplate: (...a) => current().sendTemplate(...a),

@@ -116,7 +116,9 @@ export default function ConnectWhatsApp({ status, onChange, isAdmin }) {
     );
   }
   if (status.configured) {
-    return <div className="banner ok">✅ Conectado a la API de WhatsApp Cloud · Phone Number ID <code>{status.phoneNumberId}</code></div>;
+    return status.provider === '360dialog'
+      ? <div className="banner ok">✅ WhatsApp conectado mediante <strong>360dialog</strong> (proveedor oficial de Meta) · tu número también sigue funcionando en la app del celular.</div>
+      : <div className="banner ok">✅ Conectado a la API de WhatsApp Cloud · Phone Number ID <code>{status.phoneNumberId}</code></div>;
   }
   if (!status.signup) {
     return (

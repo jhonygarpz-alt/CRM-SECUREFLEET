@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'node:crypto';
 import { HttpError, asyncHandler } from '../utils.js';
 import { requireAdmin } from '../auth.js';
 import { getSettings } from '../db.js';
@@ -27,6 +28,22 @@ export function whatsappWebhookRoutes(db, wa) {
     res.sendStatus(200);
   }));
 
+  /**
+   * Webhook para 360dialog (proveedor oficial). 360dialog no firma con el App Secret de Meta,
+   * así que la URL lleva un token secreto: /api/whatsapp/webhook/360/<WHATSAPP_VERIFY_TOKEN>.
+   */
+  r.post('/whatsapp/webhook/360/:token', asyncHandler(async (req, res) => {
+    const expected = Buffer.from(String(process.env.WHATSAPP_VERIFY_TOKEN || ''));
+    const got = Buffer.from(String(req.params.token || ''));
+    if (!expected.length || expected.length !== got.length || !crypto.timingSafeEqual(expected, got)) return res.sendStatus(403);
+    try {
+      await processWebhook(db, wa, req.body);
+    } catch (e) {
+      console.error('Error procesando webhook de 360dialog:', e);
+    }
+    res.sendStatus(200);
+  }));
+
   return r;
 }
 
@@ -45,6 +62,7 @@ export function whatsappRoutes(db, wa, signup = { enabled: false }) {
     res.json({
       configured: wa.configured,
       mode: wa.configured ? 'live' : 'simulacion',
+      provider: wa.configured ? wa.provider : null,
       ...wa.info,
       webhookVerifyTokenSet: Boolean(process.env.WHATSAPP_VERIFY_TOKEN),
       signatureValidation: Boolean(process.env.WHATSAPP_APP_SECRET),
