@@ -109,3 +109,28 @@ test('WhatsApp Web: contactos identificados solo por @lid se traducen a teléfon
   const st = (await api('/whatsapp/web')).data;
   assert.ok(st.received >= 1);
 });
+
+test('WhatsApp Web: las notas de voz se descargan y se pueden reproducir en el CRM', async () => {
+  const fakeSock = {
+    onWhatsApp: async (n) => [{ exists: true, jid: `${n}@s.whatsapp.net` }],
+    sendMessage: async () => ({ key: { id: 'Y' } }),
+    readMessages: async () => {},
+    updateMediaMessage: async () => {},
+  };
+  const audio = Buffer.from('OggS-audio-de-prueba');
+  wa._setConnected(fakeSock, '527204765054', { downloadMediaMessage: async () => audio });
+  await wa._handleUpsert({ type: 'notify', messages: [{
+    key: { id: 'AUDIO1', remoteJid: '5218155556666@s.whatsapp.net', fromMe: false },
+    pushName: 'Cliente Audio', messageTimestamp: Math.floor(Date.now() / 1000),
+    message: { audioMessage: { mimetype: 'audio/ogg; codecs=opus', ptt: true, fileLength: audio.length } },
+  }] });
+  const c = (await api('/contacts?q=Cliente Audio')).data[0];
+  const [m] = (await api(`/whatsapp/conversations/${c.id}`)).data.messages;
+  assert.equal(m.body, '[nota de voz]');
+  assert.match(m.media_mime, /^audio\/ogg/);
+  const res = await fetch(`${base}/whatsapp/media/${m.id}`, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type'), /^audio\/ogg/);
+  assert.equal(Buffer.from(await res.arrayBuffer()).toString(), 'OggS-audio-de-prueba');
+  assert.equal((await fetch(`${base}/whatsapp/media/${m.id}`)).status, 401);
+});

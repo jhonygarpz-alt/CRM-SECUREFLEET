@@ -203,6 +203,9 @@ export function openDb(file = process.env.DB_PATH || './data/crm.db') {
   // Migraciones ligeras
   const quoteCols = db.prepare('PRAGMA table_info(quotes)').all().map((c) => c.name);
   if (!quoteCols.includes('title')) db.exec('ALTER TABLE quotes ADD COLUMN title TEXT');
+  const msgCols = db.prepare('PRAGMA table_info(wa_messages)').all().map((c) => c.name);
+  if (!msgCols.includes('media_mime')) db.exec('ALTER TABLE wa_messages ADD COLUMN media_mime TEXT');
+  if (!msgCols.includes('media_path')) db.exec('ALTER TABLE wa_messages ADD COLUMN media_path TEXT');
 
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) insertSetting.run(k, v);
@@ -224,4 +227,11 @@ export function openDb(file = process.env.DB_PATH || './data/crm.db') {
 export function getSettings(db) {
   const rows = db.prepare('SELECT key, value FROM settings').all();
   return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+}
+
+/** Carpeta donde se guardan audios, imágenes y documentos de WhatsApp (junto a la base de datos). */
+export function mediaDir() {
+  const file = process.env.DB_PATH || './data/crm.db';
+  const base = file === ':memory:' ? path.resolve('./data') : path.dirname(path.resolve(file));
+  return path.join(base, 'media');
 }

@@ -2,7 +2,9 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import { HttpError, asyncHandler } from '../utils.js';
 import { requireAdmin } from '../auth.js';
-import { getSettings } from '../db.js';
+import { getSettings, mediaDir } from '../db.js';
+import path from 'node:path';
+import fs from 'node:fs';
 import { processWebhook, recordOutgoing, windowOpen } from '../services/messaging.js';
 
 /** Endpoints públicos que Meta llama (verificación y recepción del webhook). */
@@ -152,6 +154,18 @@ export function whatsappRoutes(db, wa, signup = { enabled: false }) {
       WHERE ${where.join(' AND ')}
       ORDER BY m.created_at DESC LIMIT 300`).all(params);
     res.json(rows.map((c) => ({ ...c, window_open: windowOpen(c) })));
+  });
+
+  /** Audio, imagen, video o documento recibido por WhatsApp. */
+  r.get('/whatsapp/media/:id', (req, res) => {
+    const m = db.prepare('SELECT media_path, media_mime, filename FROM wa_messages WHERE id = ?').get(req.params.id);
+    if (!m?.media_path) throw new HttpError(404, 'Archivo no disponible');
+    const file = path.join(mediaDir(), path.basename(m.media_path));
+    if (!fs.existsSync(file)) throw new HttpError(404, 'Archivo no disponible');
+    res.setHeader('Content-Type', m.media_mime || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    if (m.filename) res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(m.filename)}"`);
+    fs.createReadStream(file).pipe(res);
   });
 
   r.get('/whatsapp/unread', (_req, res) => {

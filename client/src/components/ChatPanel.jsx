@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { fmtTime, fmtDate, parseDate, fmtPhone, LEAD_STATUS } from '../format.js';
 import { toast } from './Toast.jsx';
+import MediaView from './MediaView.jsx';
 
 const STATUS_ICON = { sent: '✓', delivered: '✓✓', read: '✓✓', failed: '⚠', simulated: '⧗', received: '' };
 
@@ -117,9 +118,13 @@ export default function ChatPanel({ contactId, showHeader = true, onChange }) {
             <div key={m.id}>
               {sep && <div className="day-sep"><span>{sep}</span></div>}
               <div className={`bubble ${m.direction === 'in' ? 'in' : 'out'} ${m.status === 'failed' ? 'failed' : ''}`}>
-                {m.type === 'document' && <div className="doc">📄 {m.filename}</div>}
+                {m.media_path ? <MediaView message={m} /> : m.type === 'document' && <div className="doc">📄 {m.filename}</div>}
                 {m.type === 'template' && <div className="tpl-tag">Plantilla</div>}
-                <div className="bubble-text">{m.body}</div>
+                {(() => {
+                  // Con el archivo a la vista, se ocultan las etiquetas [nota de voz], [imagen]…; se deja el texto o pie de foto.
+                  const text = m.media_path ? String(m.body || '').replace(/^\[(nota de voz|imagen|video|sticker|documento)\]\s*/i, '') : m.body;
+                  return text && !(m.media_path && m.type === 'document' && text === m.filename) ? <div className="bubble-text">{text}</div> : null;
+                })()}
                 <div className="bubble-meta">
                   {m.direction === 'out' && m.user_name ? `${m.user_name} · ` : ''}
                   {fmtTime(m.created_at)}

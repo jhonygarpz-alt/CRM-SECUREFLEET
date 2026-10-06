@@ -3,6 +3,7 @@ import path from 'node:path';
 import QRCode from 'qrcode';
 import { processWebhook } from './messaging.js';
 import { normalizePhone } from '../utils.js';
+import { mediaDir } from '../db.js';
 
 /**
  * Conexión "tipo WhatsApp Web": el CRM se vincula al número como un dispositivo más
@@ -17,6 +18,10 @@ import { normalizePhone } from '../utils.js';
 const STATUS = { 0: 'failed', 2: 'sent', 3: 'delivered', 4: 'read', 5: 'read' };
 const SEND_GAP_MS = 1500;
 const RECENT_SECONDS = 180; // ecos del celular: solo mensajes recientes (no el historial)
+const MEDIA_MAX_BYTES = 25 * 1024 * 1024;
+const MEDIA_KINDS = ['audioMessage', 'imageMessage', 'videoMessage', 'documentMessage', 'stickerMessage'];
+const EXT = { 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'image/jpeg': 'jpg', 'image/png': 'png',
+  'image/webp': 'webp', 'video/mp4': 'mp4', 'application/pdf': 'pdf' };
 
 function unwrap(message) {
   let m = message || {};
@@ -71,6 +76,34 @@ export function createWaWebClient(db, { authDir } = {}) {
   const stats = { received: 0, skipped: 0, lastReceivedAt: null };
   const keyById = new Map(); // id de mensaje → key (para marcar como leído)
   let queue = Promise.resolve();
+  let baileysMod = null;
+  let mediaLogger = null;
+
+  /** Descarga el audio/imagen/video/documento del mensaje y lo guarda en disco. */
+  async function saveMedia(msg) {
+    const m = unwrap(msg.message);
+    const kind = MEDIA_KINDS.find((k) => m[k]);
+    if (!kind || !baileysMod || !sock) return null;
+    const info = m[kind];
+    if (Number(info.fileLength || 0) > MEDIA_MAX_BYTES) return null;
+    try {
+      const buffer = await baileysMod.downloadMediaMessage(msg, 'buffer', {},
+        { logger: mediaLogger, reuploadRequest: sock.updateMediaMessage });
+      const mime = String(info.mimetype || 'application/octet-stream');
+      const ext = EXT[mime.split(';')[0].trim()] || 'bin';
+      const name = `${String(msg.key.id).replace(/[^\w-]/g, '')}.${ext}`;
+      fs.mkdirSync(mediaDir(), { recursive: true });
+      fs.writeFileSync(path.join(mediaDir(), name), buffer);
+      return { mime, name };
+    } catch (e) {
+      console.error('[waweb] no se pudo descargar el archivo:', e.message);
+      return null;
+    }
+  }
+
+  const attachMedia = (id, media) => {
+    if (media) db.prepare('UPDATE wa_messages SET media_mime = ?, media_path = ? WHERE wa_message_id = ?').run(media.mime, media.name, id);
+  };
 
   const remember = (key) => {
     keyById.set(key.id, key);
@@ -113,16 +146,20 @@ export function createWaWebClient(db, { authDir } = {}) {
         const payload = { entry: [{ changes: [{ field: 'smb_message_echoes', value: {
           message_echoes: [{ ...cloud, from: me || '', to: digits(jid) }],
         } }] }] };
-        setTimeout(() => processWebhook(db, client, payload).catch((e) => console.error('[waweb] eco:', e.message)), 2000);
+        const mediaP = saveMedia(msg);
+        setTimeout(() => processWebhook(db, client, payload)
+          .then(async () => attachMedia(key.id, await mediaP))
+          .catch((e) => console.error('[waweb] eco:', e.message)), 2000);
       } else {
         if (type !== 'notify') continue;
         const from = digits(jid);
         stats.received++;
         stats.lastReceivedAt = new Date().toISOString();
+        const media = await saveMedia(msg);
         await processWebhook(db, client, { entry: [{ changes: [{ field: 'messages', value: {
           contacts: [{ wa_id: from, profile: { name: msg.pushName || undefined } }],
           messages: [{ ...cloud, from }],
-        } }] }] }).catch((e) => console.error('[waweb] entrante:', e.message));
+        } }] }] }).then(() => attachMedia(key.id, media)).catch((e) => console.error('[waweb] entrante:', e.message));
       }
     }
   }
@@ -148,6 +185,8 @@ export function createWaWebClient(db, { authDir } = {}) {
       const { useMultiFileAuthState, makeCacheableSignalKeyStore, fetchLatestBaileysVersion, Browsers, DisconnectReason } = baileys;
       const { default: pino } = await import('pino');
       const logger = pino({ level: 'silent' });
+      baileysMod = baileys;
+      mediaLogger = logger;
       fs.mkdirSync(dir, { recursive: true });
       const { state: auth, saveCreds } = await useMultiFileAuthState(dir);
       let version;
@@ -290,7 +329,7 @@ export function createWaWebClient(db, { authDir } = {}) {
     // Para pruebas
     _handleUpsert: (e) => handleUpsert(e, client),
     _handleUpdates: (e) => handleUpdates(e, client),
-    _setConnected(fakeSock, number) { sock = fakeSock; state = 'connected'; me = number; },
+    _setConnected(fakeSock, number, fakeBaileys) { sock = fakeSock; state = 'connected'; me = number; if (fakeBaileys) baileysMod = fakeBaileys; },
   };
   return client;
 }
