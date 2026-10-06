@@ -91,3 +91,21 @@ test('WhatsApp Web: cotización en PDF se envía como documento; plantillas no a
   assert.ok(Buffer.isBuffer(doc.document));
   assert.equal((await api(`/whatsapp/conversations/${c.id}/template`, { method: 'POST', body: { name: 'x' } })).status, 400);
 });
+
+test('WhatsApp Web: contactos identificados solo por @lid se traducen a teléfono', async () => {
+  const fakeSock = {
+    onWhatsApp: async (n) => [{ exists: true, jid: `${n}@s.whatsapp.net` }],
+    sendMessage: async () => ({ key: { id: 'X' } }),
+    readMessages: async () => {},
+    signalRepository: { lidMapping: { getPNForLID: async (lid) => (lid === '99887766@lid' ? '5218133334444@s.whatsapp.net' : null) } },
+  };
+  wa._setConnected(fakeSock, '527204765054');
+  await wa._handleUpsert({ type: 'notify', messages: [{
+    key: { id: 'LID1', remoteJid: '99887766@lid', fromMe: false },
+    pushName: 'Cliente LID', messageTimestamp: Math.floor(Date.now() / 1000), message: { conversation: 'Hola desde LID' },
+  }] });
+  const c = (await api('/contacts?q=Cliente LID')).data[0];
+  assert.equal(c.phone, '528133334444');
+  const st = (await api('/whatsapp/web')).data;
+  assert.ok(st.received >= 1);
+});

@@ -30,6 +30,11 @@ export default function WaWebPanel({ isAdmin }) {
         ✅ WhatsApp vinculado: <strong>+{s.me}</strong> (modo WhatsApp Web; tu celular sigue funcionando normal).
         <button className="btn small danger-outline" style={{ marginLeft: 12 }} onClick={logout}>Desvincular</button>
         <div className="small" style={{ marginTop: 6 }}>
+          Mensajes recibidos desde que se encendió el servidor: <strong>{s.received}</strong>
+          {s.lastReceivedAt && <> · último: {new Date(s.lastReceivedAt).toLocaleString('es-MX')}</>}
+          {s.skipped > 0 && <> · no identificados: {s.skipped}</>}
+        </div>
+        <div className="small" style={{ marginTop: 6 }}>
           Úsalo para atender y dar seguimiento uno a uno. Evita mensajes masivos o idénticos a muchos contactos: WhatsApp podría bloquear el número.
         </div>
       </div>

@@ -68,6 +68,7 @@ export function createWaWebClient(db, { authDir } = {}) {
   let starting = false;
   let retry = 0;
   const jidCache = new Map();
+  const stats = { received: 0, skipped: 0, lastReceivedAt: null };
   const keyById = new Map(); // id de mensaje → key (para marcar como leído)
   let queue = Promise.resolve();
 
@@ -76,12 +77,31 @@ export function createWaWebClient(db, { authDir } = {}) {
     if (keyById.size > 2000) keyById.delete(keyById.keys().next().value);
   };
 
+  /** Teléfono del chat; si WhatsApp solo da el identificador @lid, se traduce a número. */
+  async function resolvePhoneJid(key) {
+    const direct = phoneJid(key);
+    if (direct) return direct;
+    const lid = [key.remoteJid, key.remoteJidAlt].find((j) => typeof j === 'string' && j.endsWith('@lid'));
+    if (!lid) return null;
+    try {
+      const pn = await sock?.signalRepository?.lidMapping?.getPNForLID?.(lid);
+      return pn ? `${digits(pn)}@s.whatsapp.net` : null;
+    } catch {
+      return null;
+    }
+  }
+
   async function handleUpsert({ messages, type }, client) {
     for (const msg of messages || []) {
       const key = msg.key || {};
-      if (!key.id || key.remoteJid === 'status@broadcast' || String(key.remoteJid).endsWith('@g.us')) continue;
-      const jid = phoneJid(key);
-      if (!jid) continue;
+      if (!key.id || key.remoteJid === 'status@broadcast' || String(key.remoteJid).endsWith('@g.us')
+        || String(key.remoteJid).endsWith('@newsletter') || String(key.remoteJid).endsWith('@broadcast')) continue;
+      const jid = await resolvePhoneJid(key);
+      if (!jid) {
+        stats.skipped++;
+        console.warn('[waweb] mensaje sin número de teléfono identificable:', key.remoteJid);
+        continue;
+      }
       const body = toCloudMessage(unwrap(msg.message));
       if (!body) continue;
       const ts = Number(msg.messageTimestamp?.low ?? msg.messageTimestamp) || Math.floor(Date.now() / 1000);
@@ -97,6 +117,8 @@ export function createWaWebClient(db, { authDir } = {}) {
       } else {
         if (type !== 'notify') continue;
         const from = digits(jid);
+        stats.received++;
+        stats.lastReceivedAt = new Date().toISOString();
         await processWebhook(db, client, { entry: [{ changes: [{ field: 'messages', value: {
           contacts: [{ wa_id: from, profile: { name: msg.pushName || undefined } }],
           messages: [{ ...cloud, from }],
@@ -234,7 +256,7 @@ export function createWaWebClient(db, { authDir } = {}) {
     get info() { return { provider: 'waweb', phoneNumberId: null, businessAccountId: null }; },
     start,
     status() {
-      return { state, qr: state === 'qr' ? qr : null, me, lastError };
+      return { state, qr: state === 'qr' ? qr : null, me, lastError, ...stats };
     },
     async logout() {
       try { await sock?.logout(); } catch { /* ya desconectado */ }
