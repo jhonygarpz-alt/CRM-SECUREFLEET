@@ -63,6 +63,8 @@ export function whatsappRoutes(db, wa, signup = { enabled: false }) {
       configured: wa.configured,
       mode: wa.configured ? 'live' : 'simulacion',
       provider: wa.configured ? wa.provider : null,
+      requiresWindow: wa.requiresWindow !== false,
+      web: wa.provider === 'waweb' ? wa.status() : null,
       ...wa.info,
       webhookVerifyTokenSet: Boolean(process.env.WHATSAPP_VERIFY_TOKEN),
       signatureValidation: Boolean(process.env.WHATSAPP_APP_SECRET),
@@ -77,6 +79,18 @@ export function whatsappRoutes(db, wa, signup = { enabled: false }) {
         ? { appId: process.env.WHATSAPP_APP_ID, configId: process.env.WHATSAPP_CONFIG_ID, apiVersion: process.env.WHATSAPP_API_VERSION || 'v26.0' }
         : null,
     });
+  }));
+
+  /** Modo WhatsApp Web: estado de la vinculación (incluye el QR mientras no esté vinculado). */
+  r.get('/whatsapp/web', requireAdmin, (_req, res) => {
+    if (wa.provider !== 'waweb') return res.json({ enabled: false });
+    res.json({ enabled: true, ...wa.status() });
+  });
+
+  r.post('/whatsapp/web/logout', requireAdmin, asyncHandler(async (_req, res) => {
+    if (wa.provider !== 'waweb') throw new HttpError(400, 'El modo WhatsApp Web no está activo');
+    await wa.logout();
+    res.json({ ok: true });
   }));
 
   const saveSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
@@ -168,7 +182,7 @@ export function whatsappRoutes(db, wa, signup = { enabled: false }) {
     const body = String(req.body?.body || '').trim();
     if (!body) throw new HttpError(400, 'Escribe un mensaje');
     if (!c.whatsapp_opt_in) throw new HttpError(400, 'El contacto no ha autorizado mensajes por WhatsApp');
-    if (wa.configured && !windowOpen(c)) {
+    if (wa.configured && wa.requiresWindow !== false && !windowOpen(c)) {
       throw new HttpError(409, 'Han pasado más de 24 h desde el último mensaje del cliente. Usa una plantilla aprobada para retomar la conversación.');
     }
     const sent = await wa.sendText(c.phone, body);

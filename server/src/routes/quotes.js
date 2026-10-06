@@ -161,7 +161,7 @@ export default function quoteRoutes(db, wa) {
     const quote = load(req.params.id);
     const contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(quote.contact_id);
     if (!contact.phone) throw new HttpError(400, 'El contacto no tiene teléfono de WhatsApp');
-    if (!windowOpen(contact) && wa.configured) {
+    if (!windowOpen(contact) && wa.configured && wa.requiresWindow !== false) {
       throw new HttpError(409,
         'La ventana de 24 h está cerrada: WhatsApp solo permite enviar documentos si el cliente te escribió en las últimas 24 horas. ' +
         'Envía primero una plantilla de seguimiento desde el chat y reintenta cuando responda.');

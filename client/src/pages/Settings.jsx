@@ -34,8 +34,8 @@ export default function Settings() {
       <section className="card">
         <h3>Conexión con WhatsApp Business</h3>
         <ConnectWhatsApp status={wa} isAdmin={isAdmin} onChange={() => api('/whatsapp/status').then(setWa)} />
-        {wa?.configured && !wa.signatureValidation && <div className="banner warn">⚠️ Configura <code>WHATSAPP_APP_SECRET</code> para validar la firma de los webhooks.</div>}
-        <details>
+        {wa?.configured && wa.provider === 'meta' && !wa.signatureValidation && <div className="banner warn">⚠️ Configura <code>WHATSAPP_APP_SECRET</code> para validar la firma de los webhooks.</div>}
+        {wa?.provider !== 'waweb' && <details>
           <summary className="muted small">Configuración técnica en Meta</summary>
         <ol className="steps">
           <li>En <a href="https://developers.facebook.com/apps" target="_blank" rel="noreferrer">Meta for Developers</a> crea una app tipo <em>Business</em> y agrega el producto <strong>WhatsApp</strong>.</li>
@@ -44,7 +44,7 @@ export default function Settings() {
           <li>En WhatsApp → Configuración → Webhook, usa la URL <code className="copy" onClick={() => { navigator.clipboard?.writeText(webhookUrl); toast('URL copiada'); }}>{webhookUrl}</code> y el token de verificación que pusiste en <code>WHATSAPP_VERIFY_TOKEN</code>. Suscríbete a los campos <strong>messages</strong>, <strong>smb_message_echoes</strong>, <strong>history</strong> y <strong>smb_app_state_sync</strong> (los últimos tres son para coexistencia con la app del celular).</li>
           <li>Crea y aprueba plantillas (ej. <em>seguimiento_cotizacion</em>) para escribir a clientes fuera de la ventana de 24 h.</li>
         </ol>
-        </details>
+        </details>}
       </section>
 
       <form onSubmit={save}>

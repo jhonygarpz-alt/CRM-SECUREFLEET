@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { createWaWebClient } from './waweb.js';
 
 const D360_BASE = 'https://waba-v2.360dialog.io';
 
@@ -62,6 +63,7 @@ export function createWhatsAppClient({
   return {
     configured,
     provider,
+    requiresWindow: true, // la API oficial solo permite mensajes libres 24 h después del último mensaje del cliente
     info: { provider, phoneNumberId: is360 ? null : phoneNumberId || null, businessAccountId: businessAccountId || null, apiVersion },
 
     sendText(to, body) {
@@ -125,6 +127,8 @@ export function createWhatsAppClient({
  * (conexión hecha con el botón "Conectar WhatsApp"), después las variables de entorno.
  */
 export function createDynamicWhatsAppClient(db, { fetchImpl = globalThis.fetch } = {}) {
+  // Modo "WhatsApp Web" (dispositivo vinculado con QR), sin API oficial.
+  if (process.env.WHATSAPP_PROVIDER === 'waweb') return createWaWebClient(db);
   const current = () => {
     const rows = db.prepare(`SELECT key, value FROM settings WHERE key IN
       ('secret_wa_token','wa_phone_number_id','wa_waba_id')`).all();
@@ -139,6 +143,7 @@ export function createDynamicWhatsAppClient(db, { fetchImpl = globalThis.fetch }
   return {
     get configured() { return current().configured; },
     get provider() { return current().provider; },
+    requiresWindow: true,
     get info() { return current().info; },
     sendText: (...a) => current().sendText(...a),
     sendTemplate: (...a) => current().sendTemplate(...a),

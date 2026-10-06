@@ -42,7 +42,7 @@ if [ "$CODE" != "200" ] && [ "$CODE" != "201" ]; then
 fi
 echo "  Webhook registrado ✅"
 
-NEW_ENV=$(echo "$ENV_NOW" | grep -v -E '^(D360_API_KEY|WHATSAPP_TOKEN|WHATSAPP_PHONE_NUMBER_ID|WHATSAPP_BUSINESS_ACCOUNT_ID)=')
+NEW_ENV=$(echo "$ENV_NOW" | grep -v -E '^(D360_API_KEY|WHATSAPP_TOKEN|WHATSAPP_PHONE_NUMBER_ID|WHATSAPP_BUSINESS_ACCOUNT_ID|WHATSAPP_PROVIDER)=')
 NEW_ENV+=$'\n'"D360_API_KEY=$KEY"
 TMP=$(mktemp); chmod 600 "$TMP"; printf '%s\n' "$NEW_ENV" > "$TMP"
 gcloud compute instances add-metadata "$NAME" --zone "$ZONE" --metadata-from-file crm-env="$TMP"

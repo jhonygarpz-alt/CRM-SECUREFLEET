@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { openDb } from './db.js';
 import { createApp } from './app.js';
 import { seedCatalog } from './seed.js';
+import { createDynamicWhatsAppClient } from './services/whatsapp.js';
 
 // En producción (nube) no se permite arrancar con claves por defecto.
 if (process.env.NODE_ENV === 'production') {
@@ -21,10 +22,12 @@ if (process.env.LOAD_CATALOG === '1' && db.prepare('SELECT COUNT(*) AS n FROM pr
   seedCatalog(db);
   console.log('Catálogo base cargado.');
 }
-const app = createApp(db);
+const wa = createDynamicWhatsAppClient(db);
+if (wa.provider === 'waweb') wa.start();
+const app = createApp(db, { wa });
 const port = Number(process.env.PORT) || 4000;
 
 app.listen(port, () => {
   console.log(`SecureFleet CRM escuchando en el puerto ${port}`);
-  if (!process.env.WHATSAPP_TOKEN) console.log('WhatsApp en MODO SIMULACIÓN (configura WHATSAPP_TOKEN y WHATSAPP_PHONE_NUMBER_ID)');
+  console.log(`WhatsApp: ${wa.provider === 'waweb' ? 'modo WhatsApp Web (QR en Configuración)' : wa.configured ? wa.provider : 'MODO SIMULACIÓN'}`);
 });

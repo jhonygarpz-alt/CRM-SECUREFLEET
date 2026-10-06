@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { toast } from './Toast.jsx';
+import WaWebPanel from './WaWebPanel.jsx';
 
 /** Carga el SDK de Facebook una sola vez. */
 function loadFacebookSdk({ appId, apiVersion }) {
@@ -46,6 +47,7 @@ export default function ConnectWhatsApp({ status, onChange, isAdmin }) {
   }, []);
 
   if (!status) return null;
+  if (status.provider === 'waweb') return <WaWebPanel isAdmin={isAdmin} />;
 
   async function connect() {
     setBusy(true);

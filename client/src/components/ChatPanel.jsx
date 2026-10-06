@@ -87,7 +87,8 @@ export default function ChatPanel({ contactId, showHeader = true, onChange }) {
   const { contact, messages } = data;
   const suggestions = text.startsWith('/') ? replies.filter((r) => r.shortcut.startsWith(text.split(' ')[0])) : [];
   const liveMode = waStatus?.configured;
-  const canFreeText = !liveMode || contact.window_open;
+  const noWindowRule = waStatus?.requiresWindow === false; // modo WhatsApp Web: sin regla de 24 h
+  const canFreeText = !liveMode || contact.window_open || noWindowRule;
 
   let lastDay = '';
   return (
@@ -99,9 +100,9 @@ export default function ChatPanel({ contactId, showHeader = true, onChange }) {
             <Link to={`/contactos/${contact.id}`}><strong>{contact.name}</strong></Link>
             <small>{contact.company ? `${contact.company} · ` : ''}{fmtPhone(contact.phone)} · {LEAD_STATUS[contact.status]}</small>
           </div>
-          <span className={`pill ${contact.window_open ? 'green' : 'gray'}`} title="WhatsApp permite mensajes libres solo 24 h después del último mensaje del cliente">
+          {!noWindowRule && <span className={`pill ${contact.window_open ? 'green' : 'gray'}`} title="WhatsApp permite mensajes libres solo 24 h después del último mensaje del cliente">
             {contact.window_open ? 'Ventana 24 h abierta' : 'Ventana cerrada'}
-          </span>
+          </span>}
         </div>
       )}
       {waStatus && !waStatus.configured && (
@@ -162,7 +163,7 @@ export default function ChatPanel({ contactId, showHeader = true, onChange }) {
               ))}
             </div>
           )}
-          <button type="button" className="btn-icon" title="Enviar plantilla" onClick={() => setShowTpl(true)}>📋</button>
+          {!noWindowRule && <button type="button" className="btn-icon" title="Enviar plantilla" onClick={() => setShowTpl(true)}>📋</button>}
           <textarea
             rows={1}
             value={text}

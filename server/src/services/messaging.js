@@ -12,6 +12,13 @@ export function windowOpen(contact, now = Date.now()) {
 
 /** Guarda un mensaje saliente y actualiza el contacto. */
 export function recordOutgoing(db, { contactId, waId, type, body, mediaId, filename, simulated, userId }) {
+  // En modo WhatsApp Web el eco del propio envío puede registrarse antes: se completa ese registro.
+  const existing = waId && db.prepare('SELECT id FROM wa_messages WHERE wa_message_id = ?').get(waId);
+  if (existing) {
+    db.prepare('UPDATE wa_messages SET user_id = COALESCE(user_id, ?), type = ?, body = ?, filename = COALESCE(?, filename) WHERE id = ?')
+      .run(userId || null, type, body, filename || null, existing.id);
+    return db.prepare('SELECT * FROM wa_messages WHERE id = ?').get(existing.id);
+  }
   const info = db
     .prepare(
       `INSERT INTO wa_messages (contact_id, wa_message_id, direction, type, body, media_id, filename, status, user_id)
