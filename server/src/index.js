@@ -25,6 +25,7 @@ if (process.env.LOAD_CATALOG === '1' && db.prepare('SELECT COUNT(*) AS n FROM pr
 const wa = createDynamicWhatsAppClient(db);
 if (wa.provider === 'waweb') wa.start();
 const app = createApp(db, { wa });
+app.locals.campaigns.start(); // envío de campañas en segundo plano
 const port = Number(process.env.PORT) || 4000;
 
 app.listen(port, () => {

@@ -13,6 +13,7 @@ import QuoteEditor from './pages/QuoteEditor.jsx';
 import Inbox from './pages/Inbox.jsx';
 import Activities from './pages/Activities.jsx';
 import Settings from './pages/Settings.jsx';
+import { CampaignList, CampaignNew, CampaignDetail } from './pages/Campaigns.jsx';
 
 const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
@@ -52,6 +53,9 @@ export default function App() {
           <Route path="pipeline" element={<Pipeline />} />
           <Route path="whatsapp" element={<Inbox />} />
           <Route path="whatsapp/:contactId" element={<Inbox />} />
+          <Route path="campanas" element={<CampaignList />} />
+          <Route path="campanas/nueva" element={<CampaignNew />} />
+          <Route path="campanas/:id" element={<CampaignDetail />} />
           <Route path="cotizaciones" element={<Quotes />} />
           <Route path="cotizaciones/nueva" element={<QuoteEditor />} />
           <Route path="cotizaciones/:id" element={<QuoteEditor />} />

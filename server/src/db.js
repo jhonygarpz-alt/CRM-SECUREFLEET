@@ -154,6 +154,33 @@ CREATE TABLE IF NOT EXISTS brand_assets (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS campaigns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  body TEXT NOT NULL,
+  media_path TEXT,
+  media_mime TEXT,
+  status TEXT NOT NULL DEFAULT 'borrador',
+  min_delay INTEGER NOT NULL DEFAULT 45,
+  max_delay INTEGER NOT NULL DEFAULT 120,
+  daily_limit INTEGER NOT NULL DEFAULT 30,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  started_at TEXT,
+  finished_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS campaign_recipients (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pendiente',
+  error TEXT,
+  wa_message_id TEXT,
+  sent_at TEXT,
+  UNIQUE (campaign_id, contact_id)
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT

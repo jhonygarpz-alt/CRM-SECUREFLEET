@@ -9,6 +9,7 @@ const NAV = [
   ['/contactos', '👥', 'Leads y clientes'],
   ['/pipeline', '🧭', 'Pipeline de ventas'],
   ['/whatsapp', '💬', 'WhatsApp'],
+  ['/campanas', '📣', 'Campañas'],
   ['/seguimientos', '⏰', 'Seguimientos'],
   ['/cotizaciones', '🧾', 'Cotizaciones'],
   ['/catalogo', '📦', 'Catálogo'],

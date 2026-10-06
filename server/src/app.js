@@ -17,6 +17,8 @@ import settingsRoutes from './routes/settings.js';
 import legalRoutes from './routes/legal.js';
 import { brandingPublicRoutes, brandingAdminRoutes } from './routes/branding.js';
 import { whatsappRoutes, whatsappWebhookRoutes } from './routes/whatsapp.js';
+import campaignRoutes from './routes/campaigns.js';
+import { createCampaignRunner } from './services/campaigns.js';
 
 export function createApp(db, { wa = createDynamicWhatsAppClient(db), signup = createSignupClient() } = {}) {
   const app = express();
@@ -44,6 +46,9 @@ export function createApp(db, { wa = createDynamicWhatsAppClient(db), signup = c
   api.use(dashboardRoutes(db));
   api.use(settingsRoutes(db));
   api.use(whatsappRoutes(db, wa, signup));
+  const campaigns = createCampaignRunner(db, wa);
+  app.locals.campaigns = campaigns;
+  api.use(campaignRoutes(db, campaigns));
   app.use('/api', api);
 
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Ruta no encontrada')));

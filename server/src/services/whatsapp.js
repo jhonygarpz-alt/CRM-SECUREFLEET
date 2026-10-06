@@ -90,6 +90,18 @@ export function createWhatsAppClient({
       return { ...sent, mediaId: media.id };
     },
 
+    /** Sube una imagen y la envía con texto (pie de foto). */
+    async sendImage(to, buffer, mime = 'image/jpeg', caption = '') {
+      if (!configured) return { id: `sim-${crypto.randomUUID()}`, simulated: true };
+      const form = new FormData();
+      form.append('messaging_product', 'whatsapp');
+      form.append('type', mime);
+      form.append('file', new Blob([buffer], { type: mime }), `imagen.${mime.split('/')[1] || 'jpg'}`);
+      const media = await graph(path('media'), { form });
+      const sent = await sendMessage(to, { type: 'image', image: { id: media.id, caption } });
+      return { ...sent, mediaId: media.id };
+    },
+
     markAsRead(messageId) {
       if (!configured) return Promise.resolve();
       return graph(path('messages'), {
@@ -148,6 +160,7 @@ export function createDynamicWhatsAppClient(db, { fetchImpl = globalThis.fetch }
     sendText: (...a) => current().sendText(...a),
     sendTemplate: (...a) => current().sendTemplate(...a),
     sendDocument: (...a) => current().sendDocument(...a),
+    sendImage: (...a) => current().sendImage(...a),
     markAsRead: (...a) => current().markAsRead(...a),
     listTemplates: (...a) => current().listTemplates(...a),
     verifySignature: (...a) => current().verifySignature(...a),

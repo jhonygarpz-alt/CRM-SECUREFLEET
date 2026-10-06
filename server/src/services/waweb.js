@@ -316,6 +316,9 @@ export function createWaWebClient(db, { authDir } = {}) {
     async sendDocument(to, buffer, filename, caption, mime = 'application/pdf') {
       return send(to, { document: buffer, mimetype: mime, fileName: filename, caption });
     },
+    async sendImage(to, buffer, mime = 'image/jpeg', caption = '') {
+      return send(to, { image: buffer, mimetype: mime, caption });
+    },
     async markAsRead(messageId) {
       const key = keyById.get(messageId);
       if (key && sock && state === 'connected') await sock.readMessages([key]).catch(() => {});

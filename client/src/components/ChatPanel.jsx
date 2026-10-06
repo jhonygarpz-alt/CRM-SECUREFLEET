@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { fmtTime, fmtDate, parseDate, fmtPhone, LEAD_STATUS } from '../format.js';
 import { toast } from './Toast.jsx';
@@ -17,6 +17,7 @@ export default function ChatPanel({ contactId, showHeader = true, onChange }) {
   const [tpl, setTpl] = useState({ name: '', params: '' });
   const [waStatus, setWaStatus] = useState(null);
   const endRef = useRef(null);
+  const navigate = useNavigate();
   const lastCount = useRef(0);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -133,6 +134,11 @@ export default function ChatPanel({ contactId, showHeader = true, onChange }) {
                   )}
                 </div>
                 {m.error && <div className="error small">{m.error}</div>}
+                {m.direction === 'out' && (
+                  <button type="button" className="btn-link small fwd" onClick={() => navigate(`/campanas/nueva?from=${m.id}`)}>
+                    ↪ Reenviar a varios
+                  </button>
+                )}
               </div>
             </div>
           );
