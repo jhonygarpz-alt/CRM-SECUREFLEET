@@ -41,8 +41,8 @@ function saveMessage(db, { phone, msg, direction, status, autoCreate, markUnread
   let contact = db.prepare('SELECT * FROM contacts WHERE phone = ?').get(phone);
   if (!contact) {
     if (!autoCreate) return false;
-    const info = db.prepare(`INSERT INTO contacts (type, name, phone, source, status) VALUES ('lead', ?, ?, 'WhatsApp', 'nuevo')`)
-      .run(`WhatsApp +${phone}`, phone);
+    const info = db.prepare(`INSERT INTO contacts (type, name, phone, source, status, wa_registered)
+        VALUES ('lead', ?, ?, 'WhatsApp', 'nuevo', 0)`).run(`WhatsApp +${phone}`, phone);
     contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(info.lastInsertRowid);
   }
   const tsSql = toSql(msg.timestamp);
@@ -86,7 +86,7 @@ export async function processWebhook(db, wa, payload) {
           if (settings.wa_auto_create_leads !== '1') continue;
           const name = profiles[msg.from] || `WhatsApp +${phone}`;
           const info = db
-            .prepare(`INSERT INTO contacts (type, name, phone, source, status) VALUES ('lead', ?, ?, 'WhatsApp', 'nuevo')`)
+            .prepare(`INSERT INTO contacts (type, name, phone, source, status, wa_registered) VALUES ('lead', ?, ?, 'WhatsApp', 'nuevo', 0)`)
             .run(name, phone);
           contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(info.lastInsertRowid);
           db.prepare(`INSERT INTO activities (contact_id, type, subject, notes) VALUES (?, 'whatsapp', ?, ?)`).run(

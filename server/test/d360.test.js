@@ -46,7 +46,7 @@ test('360dialog: estado, envío con D360-API-KEY, documento y plantillas', async
     contacts: [{ wa_id: '5218110000001', profile: { name: 'Cliente 360' } }],
     messages: [{ id: 'wamid.in360', from: '5218110000001', timestamp: ts, type: 'text', text: { body: 'Hola' } }],
   } }] }] })).status, 200);
-  const c = (await api('/contacts?q=8110000001')).data[0];
+  const c = (await api('/contacts?wa=todos&q=8110000001')).data[0];
   assert.equal(c.phone, '528110000001');
 
   await api(`/whatsapp/conversations/${c.id}/send`, { method: 'POST', body: { body: 'Hola desde el CRM' } });
@@ -74,7 +74,7 @@ test('360dialog: token del webhook, ecos del celular e historial', async () => {
   await hook('tok360secret', { id: 'evt1', event: 'history', data: { history: [{ threads: [{ id: '5218110000002', messages: [
     { from: '5218110000002', id: 'wamid.h360', timestamp: String(Number(ts) - 60), type: 'text', text: { body: '¿Precio del GPS?' } },
   ] }] }] } });
-  const c = (await api('/contacts?q=8110000002')).data[0];
+  const c = (await api('/contacts?wa=todos&q=8110000002')).data[0];
   const msgs = (await api(`/whatsapp/conversations/${c.id}`)).data.messages;
   assert.deepEqual(msgs.map((m) => [m.direction, m.body]), [['in', '¿Precio del GPS?'], ['out', 'Te escribo desde el celular']]);
 });

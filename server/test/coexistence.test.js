@@ -79,7 +79,7 @@ test('ecos del celular e historial se guardan en la conversación', async () => 
   ] }] }] });
   await hook({ state_sync: [{ type: 'contact', action: 'add', contact: { full_name: 'Pedro Flotillas', phone_number: '5215599990000' } }] });
 
-  const contact = (await api('/contacts?q=5599990000')).data;
+  const contact = (await api('/contacts?wa=todos&q=5599990000')).data;
   assert.equal(contact.length, 1);
   assert.equal(contact[0].name, 'Pedro Flotillas');
   const msgs = (await api(`/whatsapp/conversations/${contact[0].id}`)).data.messages;

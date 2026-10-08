@@ -89,7 +89,7 @@ test('flujo completo: lead por WhatsApp → respuesta → cotización enviada po
   assert.equal((await signedWebhook(incoming('5215511112222', 'Quiero GPS para 5 camionetas', 'wamid.in1'))).status, 200);
   // idempotente ante reintentos de Meta
   await signedWebhook(incoming('5215511112222', 'Quiero GPS para 5 camionetas', 'wamid.in1'));
-  const contacts = (await api('/contacts?q=Pedro')).data;
+  const contacts = (await api('/contacts?wa=todos&q=Pedro')).data;
   assert.equal(contacts.length, 1);
   const lead = contacts[0];
   assert.equal(lead.source, 'WhatsApp');
@@ -98,9 +98,9 @@ test('flujo completo: lead por WhatsApp → respuesta → cotización enviada po
   const conv = (await api(`/whatsapp/conversations/${lead.id}`)).data;
   assert.equal(conv.messages.length, 1);
   assert.equal(conv.contact.window_open, true);
-  assert.equal((await api('/whatsapp/unread')).data.total, 1);
+  assert.equal((await api('/whatsapp/unread')).data.others, 1); // número nuevo: va a "Otros chats" hasta registrarlo
   await api(`/whatsapp/conversations/${lead.id}/read`, { method: 'POST' });
-  assert.equal((await api('/whatsapp/unread')).data.total, 0);
+  assert.equal((await api('/whatsapp/unread')).data.others, 0);
 
   // 2. Respuesta del vendedor
   const sent = await api(`/whatsapp/conversations/${lead.id}/send`, { method: 'POST', body: { body: '¡Hola Pedro!' } });
@@ -166,7 +166,7 @@ test('celular mexicano 521… se une al contacto existente 52…', async () => {
   const c = (await api('/contacts', { method: 'POST', body: { name: 'Mismo Cliente', phone: '55 1111 3333' } })).data;
   assert.equal(c.phone, '525511113333');
   await signedWebhook(incoming('5215511113333', 'hola', 'wamid.mx1', 'Otro nombre'));
-  assert.equal((await api('/contacts?q=5511113333')).data.length, 1);
+  assert.equal((await api('/contacts?wa=todos&q=5511113333')).data.length, 1);
   assert.equal((await api(`/whatsapp/conversations/${c.id}`)).data.messages.length, 1);
 });
 

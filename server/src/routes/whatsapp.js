@@ -141,13 +141,16 @@ export function whatsappRoutes(db, wa, signup = { enabled: false }) {
 
   /** Bandeja: una fila por contacto con su último mensaje. */
   r.get('/whatsapp/conversations', (req, res) => {
-    const { q, unread } = req.query;
+    const { q, unread, scope = 'leads' } = req.query;
     const where = ['m.id IS NOT NULL'];
+    // Por defecto solo leads registrados; "otros" son chats de números que no están en el CRM (p. ej. personales).
+    if (scope === 'leads') where.push('c.wa_registered = 1');
+    else if (scope === 'otros') where.push('c.wa_registered = 0');
     const params = {};
     if (q) { where.push('(c.name LIKE @q OR c.company LIKE @q OR c.phone LIKE @q)'); params.q = `%${q}%`; }
     if (unread === '1') where.push('c.unread_count > 0');
     const rows = db.prepare(`
-      SELECT c.id, c.name, c.company, c.phone, c.status, c.type, c.unread_count, c.last_inbound_at, c.owner_id,
+      SELECT c.id, c.name, c.company, c.phone, c.status, c.type, c.unread_count, c.last_inbound_at, c.owner_id, c.wa_registered,
         m.body AS last_body, m.direction AS last_direction, m.status AS last_status, m.created_at AS last_at
       FROM contacts c
       LEFT JOIN wa_messages m ON m.id = (SELECT id FROM wa_messages WHERE contact_id = c.id ORDER BY created_at DESC, id DESC LIMIT 1)
@@ -169,11 +172,23 @@ export function whatsappRoutes(db, wa, signup = { enabled: false }) {
   });
 
   r.get('/whatsapp/unread', (_req, res) => {
-    res.json(db.prepare('SELECT COALESCE(SUM(unread_count),0) AS total FROM contacts').get());
+    res.json(db.prepare(`SELECT COALESCE(SUM(CASE WHEN wa_registered = 1 THEN unread_count END), 0) AS total,
+        COALESCE(SUM(CASE WHEN wa_registered = 0 THEN unread_count END), 0) AS others FROM contacts`).get());
+  });
+
+  /** Convierte un chat de "Otros chats" en lead registrado (opcionalmente con nombre y empresa). */
+  r.post('/whatsapp/conversations/:contactId/register', (req, res) => {
+    const c = db.prepare('SELECT id, name, company FROM contacts WHERE id = ?').get(req.params.contactId);
+    if (!c) throw new HttpError(404, 'Contacto no encontrado');
+    const name = String(req.body?.name || '').trim() || c.name;
+    const company = req.body?.company === undefined ? c.company : String(req.body.company).trim() || null;
+    db.prepare(`UPDATE contacts SET wa_registered = 1, name = ?, company = ?, owner_id = COALESCE(owner_id, ?),
+        updated_at = datetime('now') WHERE id = ?`).run(name, company, req.user.id, c.id);
+    res.json({ ok: true });
   });
 
   r.get('/whatsapp/conversations/:contactId', (req, res) => {
-    const c = db.prepare('SELECT id, name, company, phone, status, type, last_inbound_at, whatsapp_opt_in FROM contacts WHERE id = ?')
+    const c = db.prepare('SELECT id, name, company, phone, status, type, last_inbound_at, whatsapp_opt_in, wa_registered FROM contacts WHERE id = ?')
       .get(req.params.contactId);
     if (!c) throw new HttpError(404, 'Contacto no encontrado');
     const messages = db.prepare(`SELECT m.*, u.name AS user_name FROM wa_messages m LEFT JOIN users u ON u.id = m.user_id

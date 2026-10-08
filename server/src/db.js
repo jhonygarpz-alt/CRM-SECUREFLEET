@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS contacts (
   last_contact_at TEXT,
   last_inbound_at TEXT,
   unread_count INTEGER NOT NULL DEFAULT 0,
+  wa_registered INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -233,6 +234,15 @@ export function openDb(file = process.env.DB_PATH || './data/crm.db') {
   const msgCols = db.prepare('PRAGMA table_info(wa_messages)').all().map((c) => c.name);
   if (!msgCols.includes('media_mime')) db.exec('ALTER TABLE wa_messages ADD COLUMN media_mime TEXT');
   if (!msgCols.includes('media_path')) db.exec('ALTER TABLE wa_messages ADD COLUMN media_path TEXT');
+  // wa_registered = 0: chat creado solo porque escribió a WhatsApp (p. ej. contactos personales); no es un lead registrado.
+  const contactCols = db.prepare('PRAGMA table_info(contacts)').all().map((c) => c.name);
+  if (!contactCols.includes('wa_registered')) {
+    db.exec('ALTER TABLE contacts ADD COLUMN wa_registered INTEGER NOT NULL DEFAULT 1');
+    db.exec(`UPDATE contacts SET wa_registered = 0
+      WHERE source = 'WhatsApp' AND owner_id IS NULL AND COALESCE(company, '') = '' AND COALESCE(email, '') = ''
+        AND NOT EXISTS (SELECT 1 FROM deals d WHERE d.contact_id = contacts.id)
+        AND NOT EXISTS (SELECT 1 FROM quotes q WHERE q.contact_id = contacts.id)`);
+  }
 
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) insertSetting.run(k, v);

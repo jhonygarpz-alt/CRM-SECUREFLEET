@@ -12,13 +12,16 @@ export default function Inbox() {
   const [convs, setConvs] = useState([]);
   const [q, setQ] = useState('');
   const [unreadOnly, setUnreadOnly] = useState(false);
+  const [scope, setScope] = useState('leads');
+  const [counts, setCounts] = useState({ total: 0, others: 0 });
   const [newChat, setNewChat] = useState(false);
   const [simulate, setSimulate] = useState(false);
   const [status, setStatus] = useState(null);
 
   const load = useCallback(() => {
-    api(`/whatsapp/conversations?${new URLSearchParams({ q, unread: unreadOnly ? '1' : '' })}`).then(setConvs).catch(() => {});
-  }, [q, unreadOnly]);
+    api(`/whatsapp/conversations?${new URLSearchParams({ q, unread: unreadOnly ? '1' : '', scope })}`).then(setConvs).catch(() => {});
+    api('/whatsapp/unread').then(setCounts).catch(() => {});
+  }, [q, unreadOnly, scope]);
 
   useEffect(() => {
     load();
@@ -38,6 +41,14 @@ export default function Inbox() {
                 {status && !status.configured && <button className="btn small" onClick={() => setSimulate(true)} title="Simular mensaje entrante">🧪</button>}
                 <button className="btn small primary" onClick={() => setNewChat(true)}>+ Chat</button>
               </div>
+            </div>
+            <div className="tabs inbox-tabs">
+              <button type="button" className={scope === 'leads' ? 'on' : ''} onClick={() => setScope('leads')}>
+                Leads {counts.total > 0 && <span className="badge-count">{counts.total}</span>}
+              </button>
+              <button type="button" className={scope === 'otros' ? 'on' : ''} onClick={() => setScope('otros')} title="Números que no están registrados en el CRM, por ejemplo chats personales">
+                Otros chats {counts.others > 0 && <span className="badge-count gray">{counts.others}</span>}
+              </button>
             </div>
             <input placeholder="Buscar…" value={q} onChange={(e) => setQ(e.target.value)} />
             <label className="check small"><input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} /> Solo no leídos</label>
@@ -59,7 +70,9 @@ export default function Inbox() {
                 </div>
               </li>
             ))}
-            {convs.length === 0 && <li className="muted pad">No hay conversaciones todavía. Cuando un cliente escriba a tu WhatsApp Business aparecerá aquí.</li>}
+            {convs.length === 0 && <li className="muted pad">{scope === 'otros'
+              ? 'No hay chats de números sin registrar.'
+              : 'No hay conversaciones con leads todavía. Los chats de números que no están en el CRM aparecen en "Otros chats".'}</li>}
           </ul>
         </aside>
         <section className={`inbox-chat ${contactId ? '' : 'hide-mobile'}`}>

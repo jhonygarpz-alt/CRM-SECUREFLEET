@@ -107,6 +107,7 @@ export default function ChatPanel({ contactId, showHeader = true, onChange }) {
           </span>}
         </div>
       )}
+      {contact.wa_registered === 0 && <RegisterBanner contact={contact} onDone={() => { load(); notify(); }} />}
       {waStatus && !waStatus.configured && (
         <div className="banner warn">Modo simulación: los mensajes se registran pero no se envían. Configura la API de WhatsApp en el servidor.</div>
       )}
@@ -187,6 +188,37 @@ export default function ChatPanel({ contactId, showHeader = true, onChange }) {
       )}
       {contact.last_inbound_at && (
         <div className="muted small pad-x">Último mensaje del cliente: {parseDate(contact.last_inbound_at).toLocaleString('es-MX')}</div>
+      )}
+    </div>
+  );
+}
+
+/** Chat de un número que no es lead (p. ej. contacto personal): permite registrarlo en el CRM. */
+function RegisterBanner({ contact, onDone }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ name: contact.name.startsWith('WhatsApp +') ? '' : contact.name, company: contact.company || '' });
+  async function submit(e) {
+    e.preventDefault();
+    try {
+      await api(`/whatsapp/conversations/${contact.id}/register`, { method: 'POST', body: f });
+      toast('Registrado como lead');
+      onDone();
+    } catch (err) { toast(err.message, 'err'); }
+  }
+  return (
+    <div className="banner info register-banner">
+      {!open ? (
+        <>
+          <span>Este número no está registrado como lead; por eso aparece en <b>Otros chats</b>.</span>
+          <button type="button" className="btn small primary" onClick={() => setOpen(true)}>Registrar como lead</button>
+        </>
+      ) : (
+        <form className="row wrap" onSubmit={submit}>
+          <input required placeholder="Nombre" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+          <input placeholder="Empresa" value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} />
+          <button className="btn small primary">Guardar</button>
+          <button type="button" className="btn small" onClick={() => setOpen(false)}>Cancelar</button>
+        </form>
       )}
     </div>
   );

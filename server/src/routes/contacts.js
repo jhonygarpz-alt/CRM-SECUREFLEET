@@ -30,8 +30,9 @@ export default function contactRoutes(db) {
   const r = Router();
 
   r.get('/contacts', (req, res) => {
-    const { q, type, status, owner_id, source } = req.query;
-    const where = [];
+    const { q, type, status, owner_id, source, wa } = req.query;
+    // Los chats de WhatsApp sin registrar (wa_registered = 0) no aparecen como leads salvo que se pidan.
+    const where = wa === 'todos' ? [] : [wa === 'otros' ? 'c.wa_registered = 0' : 'c.wa_registered = 1'];
     const params = {};
     if (q) {
       where.push('(c.name LIKE @q OR c.company LIKE @q OR c.email LIKE @q OR c.phone LIKE @q OR c.tags LIKE @q)');
@@ -78,6 +79,8 @@ export default function contactRoutes(db) {
     const data = clean(req.body || {});
     if ('name' in data && !data.name) throw new HttpError(400, 'El nombre es obligatorio');
     data.updated_at = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    // Editar el contacto desde el CRM lo registra como lead.
+    data.wa_registered = 1;
     const upd = buildUpdate('contacts', existing.id, data);
     uniqueGuard(() => db.prepare(upd.sql).run(upd.params));
     res.json(db.prepare('SELECT * FROM contacts WHERE id = ?').get(existing.id));
@@ -100,9 +103,17 @@ export default function contactRoutes(db) {
         try {
           const data = clean(row);
           if (!data.name) throw new Error('sin nombre');
-          if (data.phone && db.prepare('SELECT 1 FROM contacts WHERE phone = ?').get(data.phone)) throw new Error('teléfono duplicado');
           data.owner_id ??= req.user.id;
           data.source ??= 'Importación';
+          const dup = data.phone && db.prepare('SELECT id, wa_registered FROM contacts WHERE phone = ?').get(data.phone);
+          if (dup && dup.wa_registered) throw new Error('teléfono duplicado');
+          if (dup) {
+            // Ya había escrito por WhatsApp sin estar registrado: se completa con los datos importados.
+            const upd = buildUpdate('contacts', dup.id, { ...data, wa_registered: 1 });
+            db.prepare(upd.sql).run(upd.params);
+            created++;
+            return;
+          }
           const keys = Object.keys(data);
           db.prepare(`INSERT INTO contacts (${keys.join(', ')}) VALUES (${keys.map((k) => '@' + k).join(', ')})`).run(data);
           created++;
